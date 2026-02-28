@@ -3,23 +3,22 @@ package pantry
 import (
 	"net/http"
 
-	"github.com/Jayyk09/CUHackIt/config"
 	"github.com/Jayyk09/CUHackIt/internal/database"
 	"github.com/Jayyk09/CUHackIt/pkg/logger"
 )
 
-func RegisterRoutes(r *http.ServeMux, db *database.DB) {
-	cfg := config.GetConfig()
-	_ = &pantryHandler{
-		db:  db,
-		log: logger.GetLogger(cfg.Log.Level),
-		cfg: cfg,
-	}
+// RegisterRoutes registers all pantry routes
+func RegisterRoutes(r *http.ServeMux, db *database.DB, log *logger.Logger) {
+	h := NewHandler(db, log)
 
-	// TODO: replace stubs with real handlers
-	r.HandleFunc("GET /pantry", http.NotFound)
-	r.HandleFunc("POST /pantry", http.NotFound)
-	r.HandleFunc("GET /pantry/{id}", http.NotFound)
-	r.HandleFunc("PATCH /pantry/{id}", http.NotFound)
-	r.HandleFunc("DELETE /pantry/{id}", http.NotFound)
+	// Pantry item CRUD (nested under users)
+	r.HandleFunc("GET /users/{user_id}/pantry", h.ListItems)
+	r.HandleFunc("POST /users/{user_id}/pantry", h.CreateItem)
+	r.HandleFunc("GET /users/{user_id}/pantry/{id}", h.GetItem)
+	r.HandleFunc("PUT /users/{user_id}/pantry/{id}", h.UpdateItem)
+	r.HandleFunc("DELETE /users/{user_id}/pantry/{id}", h.DeleteItem)
+
+	// Special queries
+	r.HandleFunc("GET /users/{user_id}/pantry/expiring", h.ListExpiringSoon)
+	r.HandleFunc("GET /users/{user_id}/pantry/summary", h.GetCategorySummary)
 }
