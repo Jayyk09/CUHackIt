@@ -22,26 +22,27 @@ export function SiteHeader() {
     >
       <div className="flex items-center justify-between px-6 md:px-10 lg:px-16 h-14">
 
-        {/* Brand */}
-        <span className="font-serif text-xl tracking-[-0.02em] text-foreground">
-          Sift
-        </span>
+        {/* Brand + Left nav */}
+        <div className="flex items-center gap-10">
+          <span className="font-serif text-xl tracking-[-0.02em] text-foreground">
+            Sift
+          </span>
 
-        {/* Center nav */}
-        <nav className="hidden md:flex items-center gap-10">
-          <a
-            href="#facts"
-            className="font-sans text-[10px] tracking-[0.25em] uppercase text-muted-foreground hover:text-foreground transition-colors duration-300"
-          >
-            The Facts
-          </a>
-          <a
-            href="#pyramid"
-            className="font-sans text-[10px] tracking-[0.25em] uppercase text-muted-foreground hover:text-foreground transition-colors duration-300"
-          >
-            Food Pyramid
-          </a>
-        </nav>
+          <nav className="hidden md:flex items-center gap-10">
+            <a
+              href="#facts"
+              className="font-sans text-[10px] tracking-[0.25em] uppercase text-muted-foreground hover:text-foreground transition-colors duration-300"
+            >
+              The Facts
+            </a>
+            <a
+              href="#pyramid"
+              className="font-sans text-[10px] tracking-[0.25em] uppercase text-muted-foreground hover:text-foreground transition-colors duration-300"
+            >
+              Food Pyramid
+            </a>
+          </nav>
+        </div>
 
         {/* Right: Est. label + auth action */}
         <div className="flex items-center gap-6">

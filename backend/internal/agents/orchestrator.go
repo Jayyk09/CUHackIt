@@ -23,6 +23,7 @@ const (
 	ModeFlexible   OrchestratorMode = "flexible"
 	ModeBoth       OrchestratorMode = "both"
 	ModeSpoiling   OrchestratorMode = "spoiling"
+	ModePersonal   OrchestratorMode = "personal"
 )
 
 // Orchestrator coordinates multiple agents to generate recipes
@@ -30,6 +31,7 @@ type Orchestrator struct {
 	pantryAgent    *PantryOnlyAgent
 	flexibleAgent  *FlexibleRecipeAgent
 	spoilingAgent  *SpoilingAgent
+	personalAgent  *PersonalRecipeAgent
 	allergenFilter *AllergenFilter
 	log            *logger.Logger
 }
@@ -40,6 +42,7 @@ func NewOrchestrator(geminiClient *gemini.Client, log *logger.Logger) *Orchestra
 		pantryAgent:    NewPantryOnlyAgent(geminiClient, log),
 		flexibleAgent:  NewFlexibleRecipeAgent(geminiClient, log),
 		spoilingAgent:  NewSpoilingAgent(geminiClient, log),
+		personalAgent:  NewPersonalRecipeAgent(geminiClient, log),
 		allergenFilter: NewAllergenFilter(log),
 		log:            log,
 	}
@@ -55,6 +58,7 @@ type GenerateRequest struct {
 type GenerateResult struct {
 	PantryOnlyRecipes []Recipe  `json:"pantry_only_recipes,omitempty"`
 	FlexibleRecipes   []Recipe  `json:"flexible_recipes,omitempty"`
+	PersonalRecipes   []Recipe  `json:"personal_recipes,omitempty"`
 	AllRecipes        []Recipe  `json:"all_recipes"`
 	GeneratedAt       time.Time `json:"generated_at"`
 	TotalCount        int       `json:"total_count"`
@@ -63,9 +67,9 @@ type GenerateResult struct {
 
 // Generate orchestrates recipe generation across agents
 func (o *Orchestrator) Generate(ctx context.Context, req GenerateRequest) (*GenerateResult, error) {
-	// Allow empty pantry when user provides a prompt (flexible mode will
-	// suggest all ingredients based on the request).
-	if len(req.PantryItems) == 0 && req.UserPrompt == "" {
+	// Allow empty pantry when the user provides a prompt or when using personal mode
+	// (personal mode derives everything from the user profile, not the pantry).
+	if len(req.PantryItems) == 0 && req.UserPrompt == "" && req.Mode != ModePersonal {
 		return nil, ErrInvalidRequest
 	}
 
@@ -126,6 +130,15 @@ func (o *Orchestrator) Generate(ctx context.Context, req GenerateRequest) (*Gene
 		allRecipes = append(allRecipes, recipes...)
 		totalGenerated = len(recipes)
 
+	case ModePersonal:
+		recipes, err := o.generatePersonal(ctx, req.RecipeRequest)
+		if err != nil {
+			return nil, err
+		}
+		result.PersonalRecipes = recipes
+		allRecipes = append(allRecipes, recipes...)
+		totalGenerated = len(recipes)
+
 	default:
 		// Default to pantry-only
 		recipes, err := o.generatePantryOnly(ctx, req.RecipeRequest)
@@ -137,18 +150,17 @@ func (o *Orchestrator) Generate(ctx context.Context, req GenerateRequest) (*Gene
 		totalGenerated = len(recipes)
 	}
 
-	// Apply allergen filter
-	if len(req.Allergens) > 0 {
+	// Apply hard allergen post-filter only in personal mode.
+	// In pantry/flexible modes allergens are soft hints to Gemini; the post-filter
+	// there is overly aggressive and would wipe out all recipes if the model
+	// didn't perfectly comply. Personal mode double-enforces them.
+	if req.Mode == ModePersonal && len(req.Allergens) > 0 {
 		filteredRecipes := o.allergenFilter.FilterRecipes(allRecipes, req.Allergens)
 		result.FilteredCount = totalGenerated - len(filteredRecipes)
 		allRecipes = filteredRecipes
 
-		// Also filter the categorized lists
-		if result.PantryOnlyRecipes != nil {
-			result.PantryOnlyRecipes = o.allergenFilter.FilterRecipes(result.PantryOnlyRecipes, req.Allergens)
-		}
-		if result.FlexibleRecipes != nil {
-			result.FlexibleRecipes = o.allergenFilter.FilterRecipes(result.FlexibleRecipes, req.Allergens)
+		if result.PersonalRecipes != nil {
+			result.PersonalRecipes = o.allergenFilter.FilterRecipes(result.PersonalRecipes, req.Allergens)
 		}
 	}
 
@@ -167,12 +179,20 @@ func (o *Orchestrator) Generate(ctx context.Context, req GenerateRequest) (*Gene
 	return result, nil
 }
 
-// generatePantryOnly generates recipes using only pantry items
+// generatePantryOnly generates recipes using only pantry items.
+// If Gemini can't form any recipes from the pantry alone, it falls back to
+// flexible mode so the user always gets results.
 func (o *Orchestrator) generatePantryOnly(ctx context.Context, req RecipeRequest) ([]Recipe, error) {
 	resp, err := o.pantryAgent.GenerateRecipes(ctx, req)
 	if err != nil {
 		return nil, err
 	}
+
+	if len(resp.Recipes) == 0 {
+		o.log.Info("Orchestrator: pantry-only yielded 0 recipes, falling back to flexible mode")
+		return o.generateFlexible(ctx, req)
+	}
+
 	return resp.Recipes, nil
 }
 
@@ -236,6 +256,15 @@ func (o *Orchestrator) generateBoth(ctx context.Context, req RecipeRequest) ([]R
 // generateSpoiling generates recipes prioritizing expiring ingredients
 func (o *Orchestrator) generateSpoiling(ctx context.Context, req RecipeRequest) ([]Recipe, error) {
 	resp, err := o.spoilingAgent.GenerateRecipes(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Recipes, nil
+}
+
+// generatePersonal generates recipes from the user's profile with no pantry dependency
+func (o *Orchestrator) generatePersonal(ctx context.Context, req RecipeRequest) ([]Recipe, error) {
+	resp, err := o.personalAgent.GenerateRecipes(ctx, req)
 	if err != nil {
 		return nil, err
 	}

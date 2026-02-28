@@ -376,6 +376,8 @@ export default function DashboardPage() {
   const { user } = useUser()
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMode, setSearchMode] = useState<SearchMode>('food')
+  const [searchOffset, setSearchOffset] = useState(0)
+  const searchLimit = 12
 
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null)
   const [pantryItems, setPantryItems] = useState<PantryItem[]>([])
@@ -385,7 +387,25 @@ export default function DashboardPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [selectedRecipe, setSelectedRecipe] = useState<GeneratedRecipe | null>(null)
 
-  const { results: searchResults, isLoading, isSearching } = useDebouncedSearch(searchQuery)
+  const {
+    results: searchResults,
+    isLoading,
+    isSearching,
+    error: searchError,
+  } = useDebouncedSearch(searchQuery, {
+    limit: searchLimit,
+    offset: searchOffset,
+  })
+
+  useEffect(() => {
+    setSearchOffset(0)
+  }, [searchQuery])
+
+  useEffect(() => {
+    if (searchError) {
+      toast.error(searchError)
+    }
+  }, [searchError])
 
   // Fetch pantry items from backend
   useEffect(() => {
@@ -595,7 +615,38 @@ export default function DashboardPage() {
                 </p>
               </div>
             ) : isShowingSearchResults ? (
-              <SearchList items={displayItems} onItemClick={setSelectedFood} />
+              <>
+                <SearchList items={displayItems} onItemClick={setSelectedFood} />
+                <div className="mt-10 flex items-center justify-between border-t border-espresso/10 pt-6">
+                  <div className="text-xs uppercase tracking-[0.2em] font-sans text-espresso/40">
+                    Page {Math.floor(searchOffset / searchLimit) + 1}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setSearchOffset((prev) => Math.max(0, prev - searchLimit))}
+                      disabled={isLoading || searchOffset === 0}
+                      className={`px-4 py-2 border text-xs uppercase tracking-[0.2em] font-sans transition-colors duration-200 ${
+                        isLoading || searchOffset === 0
+                          ? 'border-espresso/10 text-espresso/30'
+                          : 'border-espresso/30 text-espresso hover:border-espresso/50'
+                      }`}
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => setSearchOffset((prev) => prev + searchLimit)}
+                      disabled={isLoading || displayItems.length < searchLimit}
+                      className={`px-4 py-2 border text-xs uppercase tracking-[0.2em] font-sans transition-colors duration-200 ${
+                        isLoading || displayItems.length < searchLimit
+                          ? 'border-espresso/10 text-espresso/30'
+                          : 'border-espresso/30 text-espresso hover:border-espresso/50'
+                      }`}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </>
             ) : (
               <FoodGrid items={displayItems} onSelect={setSelectedFood} />
             )}

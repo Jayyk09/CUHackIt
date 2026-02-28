@@ -308,6 +308,114 @@ Generate recipes now:`,
 	return prompt
 }
 
+// GeneratePersonalRecipes generates recipes purely from the user's profile
+// (allergens, dietary prefs, nutritional goals, skill, cuisines) with no
+// pantry context.  Allergens are treated as an absolute hard blocklist.
+func (c *Client) GeneratePersonalRecipes(ctx context.Context, req GenerateRecipesRequest) ([]Recipe, error) {
+	prompt := buildPersonalRecipePrompt(req)
+
+	c.log.Debug("Generating personal recipes with prompt length: %d", len(prompt))
+
+	resp, err := c.model.GenerateContent(ctx, genai.Text(prompt))
+	if err != nil {
+		c.log.Error("Gemini personal generation error: %v", err)
+		return nil, fmt.Errorf("%w: %v", ErrGenerationFail, err)
+	}
+
+	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+		return nil, ErrInvalidResponse
+	}
+
+	text, ok := resp.Candidates[0].Content.Parts[0].(genai.Text)
+	if !ok {
+		return nil, ErrInvalidResponse
+	}
+
+	var result struct {
+		Recipes []Recipe `json:"recipes"`
+	}
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		var recipes []Recipe
+		if err2 := json.Unmarshal([]byte(text), &recipes); err2 != nil {
+			c.log.Error("Failed to parse personal recipes JSON: %v", err)
+			return nil, fmt.Errorf("%w: %v", ErrInvalidResponse, err)
+		}
+		return recipes, nil
+	}
+
+	return result.Recipes, nil
+}
+
+// buildPersonalRecipePrompt constructs a profile-first prompt with allergens as hard blocks.
+func buildPersonalRecipePrompt(req GenerateRecipesRequest) string {
+	prefsJSON, _ := json.MarshalIndent(req.Preferences, "", "  ")
+
+	allergenBlock := ""
+	if len(req.Preferences.Allergens) > 0 {
+		allergenBlock = fmt.Sprintf(`
+## ⛔ ABSOLUTE ALLERGEN BLOCKLIST — NEVER violate this:
+%v
+
+Do NOT include these ingredients or ANY of their derivatives, hidden forms, or cross-contamination risks in any recipe. This is non-negotiable.`, req.Preferences.Allergens)
+	}
+
+	dietaryBlock := ""
+	if len(req.Preferences.DietaryPreferences) > 0 {
+		dietaryBlock = fmt.Sprintf(`
+## NON-NEGOTIABLE Dietary Requirements:
+%v
+
+Every recipe MUST comply with all of the above dietary requirements.`, req.Preferences.DietaryPreferences)
+	}
+
+	userPromptBlock := ""
+	if req.UserPrompt != "" {
+		userPromptBlock = fmt.Sprintf(`
+## User Request:
+The user specifically asked for: "%s". Incorporate this into the recipes.
+`, req.UserPrompt)
+	}
+
+	return fmt.Sprintf(`You are a personal chef and nutrition advisor. Generate %d recipes tailored exclusively to this user's profile — no pantry is available; suggest all ingredients fresh.
+%s%s%s
+## User Profile:
+%s
+
+## Instructions:
+1. All ingredients have from_pantry: false (everything is to be purchased fresh).
+2. Match the user's cooking skill level (%s).
+3. Actively target the user's nutritional goals in macros and ingredient choices.
+4. Favour the user's preferred cuisines where possible.
+5. Every recipe must strictly comply with all dietary requirements above.
+6. NEVER include any allergen from the blocklist — not even as a trace ingredient.
+
+## Response Format:
+Return a JSON object with a "recipes" array containing exactly %d recipes. Each recipe must have:
+- title: Creative, appetizing name
+- description: 1-2 sentence description
+- cuisine: The cuisine type
+- prep_time_minutes: Realistic prep time
+- cook_time_minutes: Realistic cook time
+- servings: Number of servings (2-4 typical)
+- difficulty: "easy", "medium", or "hard"
+- ingredients: Array of {name, amount, unit, from_pantry} — all from_pantry values must be false
+- instructions: Array of step-by-step instructions
+- missing_items: Array of {name, amount, unit} listing all ingredients (same as ingredients list)
+- calories_per_serving: Estimated calories
+- protein_g, carbs_g, fat_g: Estimated macros
+- tags: Array of relevant tags
+
+Generate recipes now:`,
+		req.RecipeCount,
+		allergenBlock,
+		dietaryBlock,
+		userPromptBlock,
+		string(prefsJSON),
+		req.Preferences.CookingSkill,
+		req.RecipeCount,
+	)
+}
+
 // GenerateText is a general-purpose text generation method
 func (c *Client) GenerateText(ctx context.Context, prompt string) (string, error) {
 	resp, err := c.model.GenerateContent(ctx, genai.Text(prompt))

@@ -23,11 +23,11 @@ function RecipeSearchBar({
   isGenerating,
   initialMode,
 }: {
-  onGenerate: (mode: 'pantry_only' | 'flexible' | 'spoiling', prompt: string) => void
+  onGenerate: (mode: 'pantry_only' | 'flexible' | 'personal' | 'spoiling', prompt: string) => void
   isGenerating: boolean
-  initialMode?: 'pantry_only' | 'flexible' | 'spoiling'
+  initialMode?: 'pantry_only' | 'flexible' | 'personal' | 'spoiling'
 }) {
-  const [mode, setMode] = useState<'pantry_only' | 'flexible' | 'spoiling'>(initialMode ?? 'flexible')
+  const [mode, setMode] = useState<'pantry_only' | 'flexible' | 'personal' | 'spoiling'>(initialMode ?? 'flexible')
   const [prompt, setPrompt] = useState('')
 
   // Sync if initialMode changes (e.g. from URL param)
@@ -73,6 +73,16 @@ function RecipeSearchBar({
             }`}
           >
             Flexible
+          </button>
+          <button
+            onClick={() => setMode('personal')}
+            className={`px-3 py-1.5 font-sans text-[9px] uppercase tracking-[0.18em] transition-colors duration-150 ${
+              mode === 'personal'
+                ? 'bg-[#6b8f71] text-cream'
+                : 'text-espresso/40 hover:text-espresso/70'
+            }`}
+          >
+            Personal
           </button>
           <button
             onClick={() => setMode('spoiling')}
@@ -204,9 +214,10 @@ export default function RecipePage() {
 
   const [selectedRecipe, setSelectedRecipe] = useState<GeneratedRecipe | SavedRecipe | null>(null)
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set())
+  const [generateMode, setGenerateMode] = useState<'pantry_only' | 'flexible' | 'personal' | 'spoiling'>('flexible')
 
   // Read mode from URL params (e.g. ?mode=spoiling)
-  const urlMode = searchParams.get('mode') as 'pantry_only' | 'flexible' | 'spoiling' | null
+  const urlMode = searchParams.get('mode') as 'pantry_only' | 'flexible' | 'personal' | 'spoiling' | null
   const autoGenerateTriggered = useRef(false)
 
   // load saved recipes
@@ -219,13 +230,31 @@ export default function RecipePage() {
   }, [user])
 
   const handleGenerate = useCallback(
-    async (mode: 'pantry_only' | 'flexible' | 'spoiling' = 'flexible', prompt = '') => {
+    async (mode: 'pantry_only' | 'flexible' | 'personal' | 'spoiling' = 'flexible', prompt = '') => {
       if (isGenerating || !user) return
+
+      // Personal mode relies on allergen/preference data set during onboarding.
+      if (mode === 'personal' && !user.onboarding_completed) {
+        toast.error('Complete your profile first — go to Settings to set your allergens and preferences.')
+        return
+      }
+
       setIsGenerating(true)
+      setGenerateMode(mode)
       setGeneratedResult(null)
 
       try {
-        const result = await generateRecipes(user.id, mode, 2, prompt)
+        const result = await generateRecipes(user.id, mode as 'pantry_only' | 'flexible' | 'both' | 'personal' | 'spoiling', 2, prompt)
+
+        // Guard: backend may return all_recipes undefined if all were filtered
+        if (!result.all_recipes?.length) {
+          if (result.filtered_count > 0) {
+            toast.error('All generated recipes were filtered due to allergens — try Personal mode for stricter matching.')
+          } else {
+            toast.info('No recipes could be generated — try adding more pantry items or using a prompt.')
+          }
+          return
+        }
 
         // Deduplicate by title (case-insensitive)
         const seen = new Set<string>()
@@ -354,7 +383,7 @@ export default function RecipePage() {
                 {urlMode === 'spoiling' ? 'Rescuing expiring ingredients' : 'Finding the right recipe'}
               </p>
               <p className="font-sans text-[10px] uppercase tracking-[0.25em] text-espresso/20">
-                {urlMode === 'spoiling' ? 'building recipes to reduce waste' : 'analysing your pantry'}
+                {urlMode === 'spoiling' ? 'building recipes to reduce waste' : generateMode === 'personal' ? 'tailoring to your profile' : 'analysing your pantry'}
               </p>
             </motion.div>
           )}

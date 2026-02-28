@@ -7,6 +7,7 @@ interface UseDebouncedSearchResult {
   results: FoodItem[]
   isLoading: boolean
   isSearching: boolean // true when query >= 3 chars
+  error: string | null
 }
 
 /**
@@ -15,13 +16,22 @@ interface UseDebouncedSearchResult {
  * - Only searches when query is 3+ characters
  * - Returns loading state and results
  */
-export function useDebouncedSearch(query: string): UseDebouncedSearchResult {
+export function useDebouncedSearch(
+  query: string,
+  options?: {
+    limit?: number
+    offset?: number
+  },
+): UseDebouncedSearchResult {
   const [results, setResults] = useState<FoodItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const isSearching = query.length >= 3
+  const limit = options?.limit ?? 12
+  const offset = options?.offset ?? 0
 
   useEffect(() => {
     // Clear any existing timeout
@@ -33,11 +43,13 @@ export function useDebouncedSearch(query: string): UseDebouncedSearchResult {
     if (!isSearching) {
       setResults([])
       setIsLoading(false)
+      setError(null)
       return
     }
 
     // Set loading state
     setIsLoading(true)
+    setError(null)
 
     // Debounce the search
     timeoutRef.current = setTimeout(() => {
@@ -48,8 +60,8 @@ export function useDebouncedSearch(query: string): UseDebouncedSearchResult {
       console.info('search request start', { query })
       searchFoodProducts({
         search: query,
-        limit: 12,
-        offset: 0,
+        limit,
+        offset,
         signal: controller.signal,
       })
         .then((searchResults) => {
@@ -62,6 +74,7 @@ export function useDebouncedSearch(query: string): UseDebouncedSearchResult {
           }
           console.error('search request failed', { query, err })
           setResults([])
+          setError(err instanceof Error ? err.message : 'Search failed')
         })
         .finally(() => {
           setIsLoading(false)
@@ -75,7 +88,7 @@ export function useDebouncedSearch(query: string): UseDebouncedSearchResult {
       }
       abortRef.current?.abort()
     }
-  }, [query, isSearching])
+  }, [query, isSearching, limit, offset])
 
-  return { results, isLoading, isSearching }
+  return { results, isLoading, isSearching, error }
 }
