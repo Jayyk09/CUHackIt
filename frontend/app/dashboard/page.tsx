@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { FoodItem, getAuthProfile, addToPantry } from '@/lib/food-api'
+import { FoodItem, addToPantry } from '@/lib/food-api'
 import { getCategoryImage } from '@/lib/category-images'
 import { useDebouncedSearch } from '@/hooks/use-debounced-search'
 import { generateRecipes, saveRecipe } from '@/lib/recipes-api'
@@ -371,56 +371,12 @@ function SearchBar({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { user, isLoading: isUserLoading } = useUser()
+  const { user } = useUser()
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMode, setSearchMode] = useState<SearchMode>('food')
 
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null)
   const [pantryItems, setPantryItems] = useState<FoodItem[]>([])
-  const [auth0Id, setAuth0Id] = useState<string | null>(null)
-  
-  const { results: searchResults, isLoading, isSearching } = useDebouncedSearch(searchQuery)
-
-  useEffect(() => {
-    getAuthProfile().then((profile) => {
-      if (profile?.sub) setAuth0Id(profile.sub)
-    })
-  }, [])
-
-  // Determine which items to display
-  const displayItems = isSearching ? searchResults : pantryItems
-  const isShowingSearchResults = isSearching
-
-  const handleAddToPantry = async (item: FoodItem, quantity: number, isFrozen: boolean) => {
-    // Check if item already in pantry
-    const exists = pantryItems.some((p) => p.id === item.id)
-    if (exists) {
-      toast.info(`${item.product_name} is already in your pantry`)
-      return
-    }
-
-    if (!auth0Id) {
-      toast.error('You must be logged in to add items to your pantry')
-      return
-    }
-
-    try {
-      await addToPantry({
-        auth0_id: auth0Id,
-        food_id: item.id,
-        quantity,
-        is_frozen: isFrozen,
-      })
-      setPantryItems((prev) => [...prev, item])
-      toast.success(`${item.product_name} added to pantry`)
-      setSelectedItem(null)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add to pantry')
-    }
-  }
-
-  const isItemInPantry = (item: FoodItem) => {
-    return pantryItems.some((p) => p.id === item.id)
 
   const [recipeResult, setRecipeResult] = useState<GenerateResult | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -466,14 +422,30 @@ export default function DashboardPage() {
     }
   }
 
-  const handleAddToPantry = (item: FoodItem) => {
+  const handleAddToPantry = async (item: FoodItem, quantity: number, isFrozen: boolean) => {
     if (pantryItems.some((p) => p.id === item.id)) {
       toast.info(`${item.product_name} is already in your pantry`)
       return
     }
-    setPantryItems((prev) => [...prev, item])
-    toast.success(`${item.product_name} added to pantry`)
-    setSelectedFood(null)
+
+    if (!user) {
+      toast.error('You must be logged in to add items to your pantry')
+      return
+    }
+
+    try {
+      await addToPantry({
+        auth0_id: user.auth0_id,
+        food_id: item.id,
+        quantity,
+        is_frozen: isFrozen,
+      })
+      setPantryItems((prev) => [...prev, item])
+      toast.success(`${item.product_name} added to pantry`)
+      setSelectedFood(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add to pantry')
+    }
   }
 
   return (
