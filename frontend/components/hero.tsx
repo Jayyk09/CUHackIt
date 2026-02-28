@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import Image from 'next/image'
+import Link from 'next/link'
 import { getFoodByName } from '@/lib/food-data'
 
 const heroImages = [
@@ -74,12 +75,12 @@ export function Hero() {
           transition={{ duration: 0.7, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="mt-8 md:mt-10"
         >
-          <a
-            href="#facts"
+          <Link
+            href="/login"
             className="border border-accent bg-accent text-accent-foreground px-8 py-3 font-sans text-xs tracking-[0.25em] uppercase hover:bg-background hover:text-accent transition-colors duration-300 cursor-pointer inline-block"
           >
-            Learn Why It Matters
-          </a>
+            Log In Now
+          </Link>
         </motion.div>
       </div>
     </section>
