@@ -10,13 +10,14 @@ import (
 
 func RegisterRoutes(r *http.ServeMux, db *database.DB) {
 	cfg := config.GetConfig()
-	h := &userHandler{
+	_ = &userHandler{
 		db:  db,
 		log: logger.GetLogger(cfg.Log.Level),
 		cfg: cfg,
 	}
 
-	r.HandleFunc("GET /users/{id}", _)
-	r.HandleFunc("POST /users", _)
-	r.HandleFunc("PUT /users/{id}", _)
+	// TODO: replace stubs with real handlers
+	r.HandleFunc("GET /users/{id}", http.NotFound)
+	r.HandleFunc("POST /users", http.NotFound)
+	r.HandleFunc("PUT /users/{id}", http.NotFound)
 }

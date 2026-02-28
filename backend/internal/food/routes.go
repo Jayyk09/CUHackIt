@@ -10,12 +10,13 @@ import (
 
 func RegisterRoutes(r *http.ServeMux, db *database.DB) {
 	cfg := config.GetConfig()
-	h := &foodHandler{
+	_ = &foodHandler{
 		db:  db,
 		log: logger.GetLogger(cfg.Log.Level),
 		cfg: cfg,
 	}
 
-	r.HandleFunc("GET /food/{id}", _)
-	r.HandleFunc("POST /food/{id}", _)
+	// TODO: replace stubs with real handlers
+	r.HandleFunc("GET /food/{id}", http.NotFound)
+	r.HandleFunc("POST /food/{id}", http.NotFound)
 }
