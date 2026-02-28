@@ -34,7 +34,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     id: 2,
     label: 'ALLERGIES',
     title: 'Any food allergies?',
-    subtitle: 'We'll make sure to flag these in your recommendations.',
+    subtitle: "We'll make sure to flag these in your recommendations.",
     field: 'allergens',
     type: 'bubble-multi',
     options: [
@@ -87,7 +87,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     id: 5,
     label: 'SKILL',
     title: 'Cooking experience?',
-    subtitle: 'We'll tailor recipe complexity to your level.',
+    subtitle: "We'll tailor recipe complexity to your level.",
     field: 'cooking_skill',
     type: 'stacked-single',
     options: ['Beginner', 'Intermediate', 'Advanced'],
