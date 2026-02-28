@@ -4,26 +4,30 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #EBECE8;
-  --foreground: #1a2e22;
-  --card: #f2f3ef;
-  --card-foreground: #1a2e22;
-  --popover: #f2f3ef;
-  --popover-foreground: #1a2e22;
-  --primary: #1a2e22;
-  --primary-foreground: #EBECE8;
-  --secondary: #dfe0db;
-  --secondary-foreground: #1a2e22;
-  --muted: #dfe0db;
-  --muted-foreground: #5e6b5e;
-  --accent: #3d2b1f;
-  --accent-foreground: #EBECE8;
+  --background: #F9F8F6;
+  --foreground: #2A2724;
+  --card: #F9F8F6;
+  --card-foreground: #2A2724;
+  --popover: #F9F8F6;
+  --popover-foreground: #2A2724;
+  --primary: #2A2724;
+  --primary-foreground: #F9F8F6;
+  --secondary: #EBE9E5;
+  --secondary-foreground: #2A2724;
+  --muted: #EBE9E5;
+  --muted-foreground: #6B6661;
+  --accent: #4A5D4E;
+  --accent-foreground: #F9F8F6;
   --destructive: #8b3a3a;
-  --destructive-foreground: #EBECE8;
-  --border: #1a2e22;
-  --input: #c8c9c3;
-  --ring: #1a2e22;
+  --destructive-foreground: #F9F8F6;
+  --border: #2A2724;
+  --input: #D8D6D2;
+  --ring: #2A2724;
   --radius: 0rem;
+  --sage: #4A5D4E;
+  --sage-dark: #3A4A3D;
+  --espresso: #2A2724;
+  --cream: #F9F8F6;
 }
 
 @theme inline {
@@ -49,6 +53,10 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-sage: var(--sage);
+  --color-sage-dark: var(--sage-dark);
+  --color-espresso: var(--espresso);
+  --color-cream: var(--cream);
   --radius-sm: calc(var(--radius));
   --radius-md: calc(var(--radius));
   --radius-lg: var(--radius);
