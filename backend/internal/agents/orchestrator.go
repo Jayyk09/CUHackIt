@@ -22,6 +22,7 @@ const (
 	ModePantryOnly OrchestratorMode = "pantry_only"
 	ModeFlexible   OrchestratorMode = "flexible"
 	ModeBoth       OrchestratorMode = "both"
+	ModeSpoiling   OrchestratorMode = "spoiling"
 	ModePersonal   OrchestratorMode = "personal"
 )
 
@@ -29,6 +30,7 @@ const (
 type Orchestrator struct {
 	pantryAgent    *PantryOnlyAgent
 	flexibleAgent  *FlexibleRecipeAgent
+	spoilingAgent  *SpoilingAgent
 	personalAgent  *PersonalRecipeAgent
 	allergenFilter *AllergenFilter
 	log            *logger.Logger
@@ -39,6 +41,7 @@ func NewOrchestrator(geminiClient *gemini.Client, log *logger.Logger) *Orchestra
 	return &Orchestrator{
 		pantryAgent:    NewPantryOnlyAgent(geminiClient, log),
 		flexibleAgent:  NewFlexibleRecipeAgent(geminiClient, log),
+		spoilingAgent:  NewSpoilingAgent(geminiClient, log),
 		personalAgent:  NewPersonalRecipeAgent(geminiClient, log),
 		allergenFilter: NewAllergenFilter(log),
 		log:            log,
@@ -117,6 +120,15 @@ func (o *Orchestrator) Generate(ctx context.Context, req GenerateRequest) (*Gene
 		allRecipes = append(allRecipes, pantryRecipes...)
 		allRecipes = append(allRecipes, flexibleRecipes...)
 		totalGenerated = len(pantryRecipes) + len(flexibleRecipes)
+
+	case ModeSpoiling:
+		recipes, err := o.generateSpoiling(ctx, req.RecipeRequest)
+		if err != nil {
+			return nil, err
+		}
+		result.PantryOnlyRecipes = recipes
+		allRecipes = append(allRecipes, recipes...)
+		totalGenerated = len(recipes)
 
 	case ModePersonal:
 		recipes, err := o.generatePersonal(ctx, req.RecipeRequest)
@@ -239,6 +251,15 @@ func (o *Orchestrator) generateBoth(ctx context.Context, req RecipeRequest) ([]R
 	}
 
 	return pantryRecipes, flexibleRecipes, nil
+}
+
+// generateSpoiling generates recipes prioritizing expiring ingredients
+func (o *Orchestrator) generateSpoiling(ctx context.Context, req RecipeRequest) ([]Recipe, error) {
+	resp, err := o.spoilingAgent.GenerateRecipes(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Recipes, nil
 }
 
 // generatePersonal generates recipes from the user's profile with no pantry dependency

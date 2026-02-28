@@ -32,6 +32,7 @@ type RecipeSource string
 const (
 	SourcePantryOnly  RecipeSource = "pantry_only"
 	SourceFlexible    RecipeSource = "flexible"
+	SourceSpoiling    RecipeSource = "spoiling"
 	SourceUserCreated RecipeSource = "user_created"
 )
 
@@ -97,9 +98,9 @@ type CreateRecipeInput struct {
 
 // UpdateRecipeInput is the input for updating a recipe
 type UpdateRecipeInput struct {
-	IsFavorite *bool   `json:"is_favorite,omitempty"`
-	Rating     *int    `json:"rating,omitempty"`
-	Notes      *string `json:"notes,omitempty"`
+	IsFavorite *bool    `json:"is_favorite,omitempty"`
+	Rating     *int     `json:"rating,omitempty"`
+	Notes      *string  `json:"notes,omitempty"`
 	Tags       []string `json:"tags,omitempty"`
 }
 

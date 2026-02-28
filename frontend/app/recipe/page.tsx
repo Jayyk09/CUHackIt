@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
+import { useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import {
@@ -20,12 +21,19 @@ import { useUser } from '@/contexts/user-context'
 function RecipeSearchBar({
   onGenerate,
   isGenerating,
+  initialMode,
 }: {
-  onGenerate: (mode: 'pantry_only' | 'flexible' | 'personal', prompt: string) => void
+  onGenerate: (mode: 'pantry_only' | 'flexible' | 'personal' | 'spoiling', prompt: string) => void
   isGenerating: boolean
+  initialMode?: 'pantry_only' | 'flexible' | 'personal' | 'spoiling'
 }) {
-  const [mode, setMode] = useState<'pantry_only' | 'flexible' | 'personal'>('flexible')
+  const [mode, setMode] = useState<'pantry_only' | 'flexible' | 'personal' | 'spoiling'>(initialMode ?? 'flexible')
   const [prompt, setPrompt] = useState('')
+
+  // Sync if initialMode changes (e.g. from URL param)
+  useEffect(() => {
+    if (initialMode) setMode(initialMode)
+  }, [initialMode])
 
   return (
     <div className="border-b border-espresso pb-6">
@@ -75,6 +83,16 @@ function RecipeSearchBar({
             }`}
           >
             Personal
+          </button>
+          <button
+            onClick={() => setMode('spoiling')}
+            className={`px-3 py-1.5 font-sans text-[9px] uppercase tracking-[0.18em] transition-colors duration-150 ${
+              mode === 'spoiling'
+                ? 'bg-red-600 text-cream'
+                : 'text-espresso/40 hover:text-espresso/70'
+            }`}
+          >
+            Use It Up
           </button>
         </div>
 
@@ -188,6 +206,7 @@ function FavoriteButton({
 
 export default function RecipePage() {
   const { user, isLoading: isUserLoading } = useUser()
+  const searchParams = useSearchParams()
   const [savedRecipes, setSavedRecipes] = useState<SavedRecipe[]>([])
   const [generatedResult, setGeneratedResult] = useState<GenerateResult | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -195,7 +214,11 @@ export default function RecipePage() {
 
   const [selectedRecipe, setSelectedRecipe] = useState<GeneratedRecipe | SavedRecipe | null>(null)
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set())
-  const [generateMode, setGenerateMode] = useState<'pantry_only' | 'flexible' | 'personal'>('flexible')
+  const [generateMode, setGenerateMode] = useState<'pantry_only' | 'flexible' | 'personal' | 'spoiling'>('flexible')
+
+  // Read mode from URL params (e.g. ?mode=spoiling)
+  const urlMode = searchParams.get('mode') as 'pantry_only' | 'flexible' | 'personal' | 'spoiling' | null
+  const autoGenerateTriggered = useRef(false)
 
   // load saved recipes
   useEffect(() => {
@@ -207,7 +230,7 @@ export default function RecipePage() {
   }, [user])
 
   const handleGenerate = useCallback(
-    async (mode: 'pantry_only' | 'flexible' | 'personal' = 'flexible', prompt = '') => {
+    async (mode: 'pantry_only' | 'flexible' | 'personal' | 'spoiling' = 'flexible', prompt = '') => {
       if (isGenerating || !user) return
 
       // Personal mode relies on allergen/preference data set during onboarding.
@@ -221,7 +244,7 @@ export default function RecipePage() {
       setGeneratedResult(null)
 
       try {
-        const result = await generateRecipes(user.id, mode as 'pantry_only' | 'flexible' | 'both' | 'personal', 2, prompt)
+        const result = await generateRecipes(user.id, mode as 'pantry_only' | 'flexible' | 'both' | 'personal' | 'spoiling', 2, prompt)
 
         // Guard: backend may return all_recipes undefined if all were filtered
         if (!result.all_recipes?.length) {
@@ -285,6 +308,16 @@ export default function RecipePage() {
     [isGenerating, user]
   )
 
+  // Auto-generate when navigating with ?mode=spoiling (from expiring toast)
+  useEffect(() => {
+    if (autoGenerateTriggered.current) return
+    if (!user || isUserLoading || isLoading) return
+    if (urlMode === 'spoiling') {
+      autoGenerateTriggered.current = true
+      handleGenerate('spoiling', '')
+    }
+  }, [user, isUserLoading, isLoading, urlMode, handleGenerate])
+
   const handleToggleFavorite = async (id: string) => {
     if (!user) return
     try {
@@ -335,7 +368,7 @@ export default function RecipePage() {
 
       <div className="p-8 space-y-10">
         {/* generate bar */}
-        <RecipeSearchBar onGenerate={handleGenerate} isGenerating={isGenerating} />
+        <RecipeSearchBar onGenerate={handleGenerate} isGenerating={isGenerating} initialMode={urlMode ?? undefined} />
 
         {/* generating spinner */}
         <AnimatePresence>
@@ -347,10 +380,10 @@ export default function RecipePage() {
               className="py-16 text-center"
             >
               <p className="font-serif text-3xl text-espresso/20 mb-3">
-                Finding the right recipe
+                {urlMode === 'spoiling' ? 'Rescuing expiring ingredients' : 'Finding the right recipe'}
               </p>
               <p className="font-sans text-[10px] uppercase tracking-[0.25em] text-espresso/20">
-                {generateMode === 'personal' ? 'tailoring to your profile' : 'analysing your pantry'}
+                {urlMode === 'spoiling' ? 'building recipes to reduce waste' : generateMode === 'personal' ? 'tailoring to your profile' : 'analysing your pantry'}
               </p>
             </motion.div>
           )}

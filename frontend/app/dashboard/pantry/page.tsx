@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useUser } from '@/contexts/user-context'
-import { listPantryItems, getCategorySummary, type PantryItem } from '@/lib/pantry-api'
+import { listPantryItems, getCategorySummary, type PantryItem, getDaysRemaining, getExpiringItems } from '@/lib/pantry-api'
 import { getCategoryImage, getAvailableCategories } from '@/lib/category-images'
 import { cn } from '@/lib/utils'
 
@@ -147,21 +148,27 @@ function PantryItemRow({
           </span>
         )}
 
-        {/* Shelf life */}
-        {item.shelf_life != null && (
-          <span
-            className={cn(
-              'px-3 py-1 border font-sans text-[10px] uppercase tracking-[0.15em]',
-              item.shelf_life <= 3
-                ? 'border-red-300/40 text-red-600/70'
-                : item.shelf_life <= 7
-                  ? 'border-amber-300/40 text-amber-600/70'
-                  : 'border-sage/30 text-sage/70'
-            )}
-          >
-            {item.shelf_life}d shelf
-          </span>
-        )}
+        {/* Days remaining until expiration */}
+        {(() => {
+          const daysLeft = getDaysRemaining(item)
+          if (daysLeft == null) return null
+          return (
+            <span
+              className={cn(
+                'px-3 py-1 border font-sans text-[10px] uppercase tracking-[0.15em]',
+                daysLeft <= 0
+                  ? 'border-red-400/50 bg-red-50 text-red-700/80'
+                  : daysLeft <= 3
+                    ? 'border-red-300/40 text-red-600/70'
+                    : daysLeft <= 7
+                      ? 'border-amber-300/40 text-amber-600/70'
+                      : 'border-sage/30 text-sage/70'
+              )}
+            >
+              {daysLeft <= 0 ? 'Expired' : `${daysLeft}d left`}
+            </span>
+          )
+        })()}
       </div>
 
       {/* Scores */}
@@ -264,10 +271,12 @@ function CategorySection({
 
 export default function PantryPage() {
   const { user, isLoading: isUserLoading } = useUser()
+  const router = useRouter()
   const [pantryItems, setPantryItems] = useState<PantryItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set())
+  const hasShownExpiryToast = useRef(false)
 
   // Fetch pantry items
   useEffect(() => {
@@ -281,6 +290,32 @@ export default function PantryPage() {
       })
       .finally(() => setIsLoading(false))
   }, [user])
+
+  // Show expiring-items toast when items are within 3 days of expiring
+  useEffect(() => {
+    if (hasShownExpiryToast.current || pantryItems.length === 0) return
+    const expiring = getExpiringItems(pantryItems, 3)
+    if (expiring.length === 0) return
+
+    hasShownExpiryToast.current = true
+
+    const names = expiring
+      .slice(0, 3)
+      .map((i) => i.product_name)
+      .join(', ')
+    const suffix = expiring.length > 3 ? ` and ${expiring.length - 3} more` : ''
+
+    toast.warning(`${names}${suffix} ${expiring.length === 1 ? 'is' : 'are'} expiring soon!`, {
+      description: 'Tap to generate a recipe that uses them up.',
+      duration: 10000,
+      action: {
+        label: 'Cook now',
+        onClick: () => {
+          router.push('/recipe?mode=spoiling')
+        },
+      },
+    })
+  }, [pantryItems, router])
 
   // Group items by category
   const groupedItems = useMemo(() => {

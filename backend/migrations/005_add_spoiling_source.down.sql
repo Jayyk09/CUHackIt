@@ -1,0 +1,3 @@
+-- PostgreSQL does not support removing enum values directly.
+-- This is a no-op down migration; the 'spoiling' value will remain in the enum.
+-- To fully revert, recreate the enum without 'spoiling' and update the column.

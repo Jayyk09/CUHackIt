@@ -24,7 +24,7 @@ export interface GeneratedRecipe {
   carbs_g?: number
   fat_g?: number
   tags?: string[]
-  source: 'pantry_only' | 'flexible' | 'personal' | 'user_created'
+  source: 'pantry_only' | 'flexible' | 'personal' | 'spoiling' | 'user_created'
 }
 
 export interface SavedRecipe {
@@ -45,7 +45,7 @@ export interface SavedRecipe {
   protein_g?: number
   carbs_g?: number
   fat_g?: number
-  source: 'pantry_only' | 'flexible' | 'personal' | 'user_created'
+  source: 'pantry_only' | 'flexible' | 'personal' | 'spoiling' | 'user_created'
   ai_model?: string
   is_favorite: boolean
   times_cooked: number
@@ -71,7 +71,7 @@ export interface GenerateResult {
 
 export async function generateRecipes(
   userId: string,
-  mode: 'pantry_only' | 'flexible' | 'both' | 'personal' = 'flexible',
+  mode: 'pantry_only' | 'flexible' | 'both' | 'personal' | 'spoiling' = 'flexible',
   count = 2,
   userPrompt = ''
 ): Promise<GenerateResult> {
@@ -285,7 +285,7 @@ const MOCK_RECIPES: GeneratedRecipe[] = [
 ]
 
 function getMockRecipes(
-  mode: 'pantry_only' | 'flexible' | 'both' | 'personal'
+  mode: 'pantry_only' | 'flexible' | 'both' | 'personal' | 'spoiling'
 ): GenerateResult {
   const pantryOnly = MOCK_RECIPES.filter((r) => r.source === 'pantry_only')
   const flexible = MOCK_RECIPES.filter((r) => r.source === 'flexible')
