@@ -12,7 +12,6 @@ import type { GeneratedRecipe, GenerateResult } from '@/lib/recipes-api'
 import { RecipeCard } from '@/components/recipe-card'
 import { RecipeDetail } from '@/components/recipe-detail'
 import { useUser } from '@/contexts/user-context'
-import { SearchList } from '@/components/search-list'
 
 // ─── Food search components ───────────────────────────────────────────────────
 
@@ -426,11 +425,6 @@ export default function DashboardPage() {
                 generating recipes
               </p>
             </motion.div>
-            </div>
-          ) : isShowingSearchResults ? (
-            <SearchList items={displayItems} onItemClick={setSelectedItem} />
-          ) : (
-            <FoodGrid items={displayItems} onSelect={setSelectedItem} />
           )}
         </AnimatePresence>
 
