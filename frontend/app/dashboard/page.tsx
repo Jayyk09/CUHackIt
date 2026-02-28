@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { FoodItem, mockPantryItems } from '@/lib/mock-data'
+import { FoodItem } from '@/lib/food-api'
 import { getCategoryImage } from '@/lib/category-images'
 import { useDebouncedSearch } from '@/hooks/use-debounced-search'
 
@@ -281,7 +281,7 @@ function DetailModal({
 export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedItem, setSelectedItem] = useState<FoodItem | null>(null)
-  const [pantryItems, setPantryItems] = useState<FoodItem[]>(mockPantryItems)
+  const [pantryItems, setPantryItems] = useState<FoodItem[]>([])
   
   const { results: searchResults, isLoading, isSearching } = useDebouncedSearch(searchQuery)
 
