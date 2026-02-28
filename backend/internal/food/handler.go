@@ -3,21 +3,24 @@ package food
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Jayyk09/CUHackIt/config"
 	"github.com/Jayyk09/CUHackIt/internal/database"
 	"github.com/Jayyk09/CUHackIt/pkg/logger"
 	"github.com/Jayyk09/CUHackIt/services/gemini"
 )
 
 // Handler handles HTTP requests for food products
-type Handler struct {
+type foodHandler struct {
 	db  *database.DB
 	log *logger.Logger
 	ai  *gemini.Client
+	cfg *config.Config
 }
 
 const (
@@ -26,12 +29,12 @@ const (
 )
 
 // NewHandler creates a new food handler
-func NewHandler(db *database.DB, ai *gemini.Client, log *logger.Logger) *Handler {
-	return &Handler{db: db, ai: ai, log: log}
+func NewHandler(db *database.DB, ai *gemini.Client, cfg *config.Config, log *logger.Logger) *foodHandler {
+	return &foodHandler{db: db, ai: ai, cfg: cfg, log: log}
 }
 
 // writeJSON writes a JSON response
-func (h *Handler) writeJSON(w http.ResponseWriter, status int, data interface{}) {
+func (h *foodHandler) writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
@@ -40,12 +43,12 @@ func (h *Handler) writeJSON(w http.ResponseWriter, status int, data interface{})
 }
 
 // writeError writes an error response
-func (h *Handler) writeError(w http.ResponseWriter, status int, message string) {
+func (h *foodHandler) writeError(w http.ResponseWriter, status int, message string) {
 	h.writeJSON(w, status, map[string]string{"error": message})
 }
 
 // List handles GET /food/search?q=...&limit=...&offset=...
-func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+func (h *foodHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit, offset, err := parsePagination(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -72,7 +75,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetProduct handles GET /food/{id}
-func (h *Handler) GetProduct(w http.ResponseWriter, r *http.Request) {
+func (h *foodHandler) GetProduct(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	if idStr == "" {
 		h.writeError(w, http.StatusBadRequest, "product id is required")
@@ -85,31 +88,18 @@ func (h *Handler) GetProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, product_name, norm_environmental_score, nutriscore_score,
-		 labels_en, allergens_en, traces_en, image_url, image_small_url, shelf_life, category
-		 FROM foods WHERE id = $1`, id)
+	product, err := getProductByID(r.Context(), h.db, id)
 	if err != nil {
+		if errors.Is(err, ErrProductNotFound) {
+			h.writeError(w, http.StatusNotFound, "product not found")
+			return
+		}
 		h.log.Error("Failed to get product: %v", err)
 		h.writeError(w, http.StatusInternalServerError, "failed to get product")
 		return
 	}
-	defer rows.Close()
-
-	if !rows.Next() {
+	if product == nil {
 		h.writeError(w, http.StatusNotFound, "product not found")
-		return
-	}
-
-	var product Product
-	if err := rows.Scan(
-		&product.ID, &product.ProductName, &product.NormEnvironmentalScore,
-		&product.NutriscoreScore, &product.LabelsEn, &product.AllergensEn,
-		&product.TracesEn, &product.ImageURL, &product.ImageSmallURL,
-		&product.ShelfLife, &product.Category,
-	); err != nil {
-		h.log.Error("Failed to scan product: %v", err)
-		h.writeError(w, http.StatusInternalServerError, "failed to get product")
 		return
 	}
 
@@ -117,7 +107,7 @@ func (h *Handler) GetProduct(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateMetadata handles PATCH /food/{id}/metadata
-func (h *Handler) UpdateMetadata(w http.ResponseWriter, r *http.Request) {
+func (h *foodHandler) UpdateMetadata(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	if idStr == "" {
 		h.writeError(w, http.StatusBadRequest, "product id is required")
@@ -186,7 +176,7 @@ func needsEnrichment(product Product) bool {
 	return categoryMissing || shelfLifeMissing
 }
 
-func (h *Handler) enrichProduct(ctx context.Context, product *Product) {
+func (h *foodHandler) enrichProduct(ctx context.Context, product *Product) {
 	if product == nil || product.ProductName == "" {
 		return
 	}

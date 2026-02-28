@@ -39,19 +39,20 @@ func Setup(r *http.ServeMux, db *database.DB, cfg *config.Config, log *logger.Lo
 	// Pantry routes
 	pantry.RegisterRoutes(r, db, log)
 
+	// Auth routes
+	store, err := auth.RegisterRoutes(r, cfg, db)
+	if err != nil {
+		return fmt.Errorf("auth routes: %w", err)
+	}
+
 	// Food search routes (with optional Gemini enrichment)
-	food.RegisterRoutes(r, db, geminiClient, log)
+	food.RegisterRoutes(r, db, store)
 
 	// Recipe routes (with optional Gemini client)
 	recipes.RegisterRoutes(r, db, geminiClient, log)
 
 	// WebSocket routes for real-time recipe streaming
 	ws.RegisterRoutes(r, db, geminiClient, log)
-
-	// Auth routes
-	if err := auth.RegisterRoutes(r, cfg, db); err != nil {
-		return fmt.Errorf("auth routes: %w", err)
-	}
 
 	// Health check
 	r.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
