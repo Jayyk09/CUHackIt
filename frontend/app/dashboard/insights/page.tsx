@@ -1,3 +1,14 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
+import { useUser } from '@/contexts/user-context'
+import {
+  getCategorySummary,
+  listPantryItems,
+  type PantryItem,
+} from '@/lib/pantry-api'
+
 const benefitHighlights = [
   { label: 'Items Rescued', value: '24', detail: 'past 30 days' },
   { label: 'Waste Avoided', value: '6.3 kg', detail: 'food saved' },
@@ -5,28 +16,159 @@ const benefitHighlights = [
   { label: 'CO2 Offset', value: '9.1 kg', detail: 'impact score' },
 ]
 
-const pantrySignals = [
-  { label: 'Avg Days to Expiry', value: '6.8', detail: 'across pantry' },
-  { label: 'Avg Nutri-Score', value: 'B', detail: 'quality signal' },
-  { label: 'Avg Eco Score', value: '71', detail: 'sustainability' },
-  { label: 'Freshness Index', value: '88%', detail: 'current mix' },
-]
+const pantrySignalLabels = {
+  avgDays: 'Avg Days to Expiry',
+  avgNutri: 'Avg Nutri-Score',
+  avgEco: 'Avg Eco Score',
+  freshness: 'Freshness Index',
+}
 
-const expiringSoon = [
-  { name: 'Spinach', days: 2, action: 'Use in a skillet' },
-  { name: 'Greek yogurt', days: 3, action: 'Blend into sauce' },
-  { name: 'Mushrooms', days: 1, action: 'Roast tonight' },
-]
-
-const pantryMix = [
-  { label: 'Produce', value: '32%' },
-  { label: 'Proteins', value: '21%' },
-  { label: 'Whole grains', value: '18%' },
-  { label: 'Dairy', value: '14%' },
-  { label: 'Pantry staples', value: '15%' },
+const fallbackActions = [
+  'Use in a skillet',
+  'Blend into sauce',
+  'Roast tonight',
+  'Add to salad',
 ]
 
 export default function InsightsPage() {
+  const { user, isLoading: isUserLoading } = useUser()
+  const [pantryItems, setPantryItems] = useState<PantryItem[]>([])
+  const [categorySummary, setCategorySummary] = useState<Record<string, number>>({})
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user) return
+    setIsLoading(true)
+    Promise.all([listPantryItems(user.id), getCategorySummary(user.id)])
+      .then(([items, summary]) => {
+        setPantryItems(items)
+        setCategorySummary(summary)
+      })
+      .catch((err) => {
+        console.error('Failed to load insights:', err)
+        toast.error(err instanceof Error ? err.message : 'Failed to load insights')
+      })
+      .finally(() => setIsLoading(false))
+  }, [user])
+
+  const pantrySignals = useMemo(() => {
+    const now = Date.now()
+    const expiryDays = pantryItems
+      .map((item) => {
+        if (!item.shelf_life) return null
+        const addedAt = new Date(item.added_at).getTime()
+        if (Number.isNaN(addedAt)) return null
+        const expiry = addedAt + item.shelf_life * 24 * 60 * 60 * 1000
+        const daysLeft = Math.ceil((expiry - now) / (24 * 60 * 60 * 1000))
+        return daysLeft
+      })
+      .filter((value): value is number => value !== null)
+
+    const avgDays = expiryDays.length
+      ? (expiryDays.reduce((sum, d) => sum + d, 0) / expiryDays.length).toFixed(1)
+      : '--'
+
+    const ecoScores = pantryItems
+      .map((item) => item.norm_environmental_score)
+      .map((value) => (typeof value === 'string' ? Number.parseFloat(value) : value))
+      .filter((value): value is number => typeof value === 'number' && !Number.isNaN(value))
+
+    const avgEco = ecoScores.length
+      ? Math.round(ecoScores.reduce((sum, v) => sum + v, 0) / ecoScores.length).toString()
+      : '--'
+
+    const nutriScores = pantryItems
+      .map((item) => item.norm_nutriscore_score ?? item.nutriscore_score)
+      .map((value) => (typeof value === 'string' ? Number.parseFloat(value) : value))
+      .filter((value): value is number => typeof value === 'number' && !Number.isNaN(value))
+
+    const avgNutri = nutriScores.length
+      ? Math.round(nutriScores.reduce((sum, v) => sum + v, 0) / nutriScores.length)
+      : null
+
+    const nutriLetter = avgNutri === null
+      ? '--'
+      : avgNutri >= 80
+        ? 'A'
+        : avgNutri >= 65
+          ? 'B'
+          : avgNutri >= 50
+            ? 'C'
+            : avgNutri >= 35
+              ? 'D'
+              : 'E'
+
+    const freshnessIndex = expiryDays.length
+      ? Math.round((expiryDays.filter((d) => d > 3).length / expiryDays.length) * 100)
+      : null
+
+    return [
+      { label: pantrySignalLabels.avgDays, value: avgDays, detail: 'across pantry' },
+      { label: pantrySignalLabels.avgNutri, value: nutriLetter, detail: 'quality signal' },
+      { label: pantrySignalLabels.avgEco, value: avgEco, detail: 'sustainability' },
+      {
+        label: pantrySignalLabels.freshness,
+        value: freshnessIndex === null ? '--' : `${freshnessIndex}%`,
+        detail: 'current mix',
+      },
+    ]
+  }, [pantryItems])
+
+  const expiringSoon = useMemo(() => {
+    const now = Date.now()
+    const items = pantryItems
+      .map((item) => {
+        if (!item.shelf_life) return null
+        const addedAt = new Date(item.added_at).getTime()
+        if (Number.isNaN(addedAt)) return null
+        const expiry = addedAt + item.shelf_life * 24 * 60 * 60 * 1000
+        const daysLeft = Math.ceil((expiry - now) / (24 * 60 * 60 * 1000))
+        return {
+          name: item.product_name || 'Item',
+          days: daysLeft,
+          action: fallbackActions[Math.abs(item.id) % fallbackActions.length],
+        }
+      })
+      .filter((value): value is { name: string; days: number; action: string } => value !== null)
+      .sort((a, b) => a.days - b.days)
+      .slice(0, 3)
+
+    if (items.length > 0) return items
+
+    return [
+      { name: 'No expiring items', days: 0, action: 'You are in good shape' },
+    ]
+  }, [pantryItems])
+
+  const pantryMix = useMemo(() => {
+    const total = Object.values(categorySummary).reduce((sum, value) => sum + value, 0)
+    if (!total) {
+      return [{ label: 'No items yet', value: '0%' }]
+    }
+    return Object.entries(categorySummary)
+      .map(([label, count]) => ({
+        label: label || 'Uncategorized',
+        value: `${Math.round((count / total) * 100)}%`,
+      }))
+      .sort((a, b) => Number.parseInt(b.value, 10) - Number.parseInt(a.value, 10))
+      .slice(0, 5)
+  }, [categorySummary])
+
+  if (isUserLoading || isLoading) {
+    return (
+      <div className="min-h-screen">
+        <div className="border-b border-espresso/10">
+          <div className="px-8 py-6">
+            <h1 className="font-serif text-2xl text-espresso">Insights</h1>
+          </div>
+        </div>
+        <div className="px-8 py-10">
+          <p className="font-serif text-xl text-espresso/30">Loading your insights...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen">
       <div className="border-b border-espresso/10">
