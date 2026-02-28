@@ -21,18 +21,27 @@ function RecipeSearchBar({
   onGenerate,
   isGenerating,
 }: {
-  onGenerate: (mode: 'pantry_only' | 'flexible') => void
+  onGenerate: (mode: 'pantry_only' | 'flexible', prompt: string) => void
   isGenerating: boolean
 }) {
   const [mode, setMode] = useState<'pantry_only' | 'flexible'>('flexible')
+  const [prompt, setPrompt] = useState('')
 
   return (
     <div className="border-b border-espresso pb-6">
       <div className="flex items-center gap-4">
         <div className="flex-1">
-          <p className="font-serif text-2xl md:text-3xl text-espresso/35 select-none">
-            {isGenerating ? 'Sifting through your pantry...' : 'generate a recipe'}
-          </p>
+          <input
+            type="text"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder={isGenerating ? 'Sifting through your pantry...' : 'describe what you want (e.g. grilled chicken)'}
+            readOnly={isGenerating}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !isGenerating) onGenerate(mode, prompt.trim())
+            }}
+            className="w-full bg-transparent font-serif text-2xl md:text-3xl text-espresso placeholder:text-espresso/35 placeholder:font-serif focus:outline-none"
+          />
         </div>
 
         {/* mode toggle */}
@@ -61,7 +70,7 @@ function RecipeSearchBar({
 
         {/* generate button */}
         <button
-          onClick={() => onGenerate(mode)}
+          onClick={() => onGenerate(mode, prompt.trim())}
           disabled={isGenerating}
           className="flex-shrink-0 flex items-center gap-2 border border-espresso/20 px-4 py-2 font-sans text-[10px] uppercase tracking-[0.2em] text-espresso/60 hover:border-espresso hover:text-espresso transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
         >
@@ -187,14 +196,32 @@ export default function RecipePage() {
   }, [user])
 
   const handleGenerate = useCallback(
-    async (mode: 'pantry_only' | 'flexible' = 'flexible') => {
+    async (mode: 'pantry_only' | 'flexible' = 'flexible', prompt = '') => {
       if (isGenerating || !user) return
       setIsGenerating(true)
       setGeneratedResult(null)
 
       try {
-        const result = await generateRecipes(user.id, mode, 2)
+        const result = await generateRecipes(user.id, mode, 2, prompt)
+
+        // Deduplicate by title (case-insensitive)
+        const seen = new Set<string>()
+        const unique = result.all_recipes.filter((r) => {
+          const key = r.title.toLowerCase()
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+        result.all_recipes = unique
+        result.total_count = unique.length
+
         setGeneratedResult(result)
+
+        // Only auto-save real AI-generated recipes, not hardcoded mocks
+        if (result.is_mock) {
+          toast.info('Showing sample recipes (backend unavailable)')
+          return
+        }
 
         // auto-save each recipe, then refresh saved list
         const saved = await Promise.all(
@@ -203,7 +230,14 @@ export default function RecipePage() {
         const newlySaved = saved.filter(Boolean) as SavedRecipe[]
 
         if (newlySaved.length > 0) {
-          setSavedRecipes((prev) => [...newlySaved, ...prev])
+          // Merge without duplicating titles already in the list
+          setSavedRecipes((prev) => {
+            const existingTitles = new Set(prev.map((r) => r.title.toLowerCase()))
+            const fresh = newlySaved.filter(
+              (r) => !existingTitles.has(r.title.toLowerCase())
+            )
+            return [...fresh, ...prev]
+          })
           toast.success(
             `${newlySaved.length} recipe${newlySaved.length > 1 ? 's' : ''} generated & saved`
           )

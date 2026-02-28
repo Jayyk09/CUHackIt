@@ -29,7 +29,8 @@ type RecipeRequest struct {
 	CuisinePreferences []string `json:"cuisine_preferences"`
 
 	// Generation options
-	RecipeCount int `json:"recipe_count"` // How many recipes to generate (1-3)
+	RecipeCount int    `json:"recipe_count"` // How many recipes to generate (1-3)
+	UserPrompt  string `json:"user_prompt"`  // Optional free-text guidance (e.g. "grilled chicken")
 }
 
 // PantryItem represents an item in the user's pantry

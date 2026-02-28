@@ -60,7 +60,9 @@ type GenerateResult struct {
 
 // Generate orchestrates recipe generation across agents
 func (o *Orchestrator) Generate(ctx context.Context, req GenerateRequest) (*GenerateResult, error) {
-	if len(req.PantryItems) == 0 {
+	// Allow empty pantry when user provides a prompt (flexible mode will
+	// suggest all ingredients based on the request).
+	if len(req.PantryItems) == 0 && req.UserPrompt == "" {
 		return nil, ErrInvalidRequest
 	}
 

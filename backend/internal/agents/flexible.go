@@ -49,6 +49,7 @@ func (a *FlexibleRecipeAgent) GenerateRecipes(ctx context.Context, req RecipeReq
 		RecipeCount:     req.RecipeCount,
 		PantryOnly:      false,
 		MaxMissingItems: a.maxMissingItems,
+		UserPrompt:      req.UserPrompt,
 	}
 
 	// Generate recipes

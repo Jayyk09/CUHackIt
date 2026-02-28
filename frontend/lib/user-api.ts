@@ -26,3 +26,15 @@ export async function getUserByAuth0ID(auth0Id: string): Promise<User> {
   }
   return res.json()
 }
+
+/**
+ * Fetch a user by their internal DB UUID.
+ */
+export async function getUserByID(id: string): Promise<User> {
+  const res = await fetch(`${API_BASE}/users/${encodeURIComponent(id)}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || 'Failed to fetch user')
+  }
+  return res.json()
+}

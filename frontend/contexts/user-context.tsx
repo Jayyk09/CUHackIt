@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { getUserByAuth0ID, type User } from '@/lib/user-api'
+import { getUserByAuth0ID, getUserByID, type User } from '@/lib/user-api'
 
 const STORAGE_KEY = 'sift_user'
 
@@ -57,7 +57,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (cached) {
           const parsed: User = JSON.parse(cached)
           if (parsed?.id) {
-            setUser(parsed)
+            // Validate the cached user still exists in the DB
+            try {
+              const fresh = await getUserByID(parsed.id)
+              setUser(fresh)
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh))
+            } catch {
+              // Cached user no longer valid — clear it
+              console.warn('Cached user invalid, clearing')
+              localStorage.removeItem(STORAGE_KEY)
+              setUser(null)
+            }
             setIsLoading(false)
             // Still check URL for a fresh uid (user may have re-logged in)
           }
@@ -67,10 +77,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
 
       // 2. Check URL for ?uid= (passed by backend after OAuth callback)
+      //    The backend now passes the internal DB UUID.
       const uid = searchParams.get('uid')
       if (uid) {
         try {
-          const resolved = await getUserByAuth0ID(uid)
+          const resolved = await getUserByID(uid)
           setUser(resolved)
           localStorage.setItem(STORAGE_KEY, JSON.stringify(resolved))
 

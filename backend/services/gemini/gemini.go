@@ -43,12 +43,45 @@ type Recipe struct {
 	Tags               []string     `json:"tags,omitempty"`
 }
 
-// Ingredient represents an ingredient in a recipe
+// Ingredient represents an ingredient in a recipe.
+// Amount uses a custom unmarshaler because Gemini sometimes returns a number
+// instead of a string (e.g. 2 vs "2").
 type Ingredient struct {
 	Name       string `json:"name"`
 	Amount     string `json:"amount"`
 	Unit       string `json:"unit,omitempty"`
 	FromPantry bool   `json:"from_pantry"`
+}
+
+// UnmarshalJSON handles Amount being either a JSON string or number.
+func (ing *Ingredient) UnmarshalJSON(data []byte) error {
+	// Use an alias to avoid infinite recursion.
+	type Alias Ingredient
+	aux := &struct {
+		Amount json.RawMessage `json:"amount"`
+		*Alias
+	}{
+		Alias: (*Alias)(ing),
+	}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	if len(aux.Amount) > 0 {
+		// Try string first
+		var s string
+		if err := json.Unmarshal(aux.Amount, &s); err == nil {
+			ing.Amount = s
+		} else {
+			// Fall back to number → string
+			var n json.Number
+			if err := json.Unmarshal(aux.Amount, &n); err == nil {
+				ing.Amount = n.String()
+			} else {
+				ing.Amount = string(aux.Amount)
+			}
+		}
+	}
+	return nil
 }
 
 // PantryItem represents an item in the user's pantry for recipe generation
@@ -77,6 +110,7 @@ type GenerateRecipesRequest struct {
 	RecipeCount     int             `json:"recipe_count"`
 	PantryOnly      bool            `json:"pantry_only"`       // If true, only use pantry items
 	MaxMissingItems int             `json:"max_missing_items"` // Max additional items (0 for pantry-only)
+	UserPrompt      string          `json:"user_prompt"`       // Optional free-text guidance from the user
 }
 
 // NewClient creates a new Gemini client
@@ -214,7 +248,7 @@ func buildRecipePrompt(req GenerateRecipesRequest) string {
 
 ## Recipe Type: %s
 %s
-
+%s
 ## User's Pantry Items:
 %s
 
@@ -253,6 +287,12 @@ Generate recipes now:`,
 				return "Use ONLY ingredients from the pantry. Do not suggest any additional ingredients."
 			}
 			return fmt.Sprintf("You may suggest up to %d additional ingredients not in the pantry.", maxMissing)
+		}(),
+		func() string {
+			if req.UserPrompt != "" {
+				return fmt.Sprintf("\n## User Request:\nThe user specifically asked for: \"%s\". Incorporate this request into the recipes — use ingredients and styles that complement it.\n", req.UserPrompt)
+			}
+			return ""
 		}(),
 		string(pantryJSON),
 		string(prefsJSON),

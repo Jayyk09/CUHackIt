@@ -313,7 +313,7 @@ function SearchBar({
   const placeholder =
     mode === 'food'
       ? 'search recipe or ingredients'
-      : 'generating from your pantry...'
+      : 'describe what you want (e.g. grilled chicken)'
 
   return (
     <div className="relative w-full border-b border-espresso pb-6">
@@ -323,6 +323,7 @@ function SearchBar({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
+          readOnly={isGenerating}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && mode === 'recipe') onGenerate()
           }}
@@ -426,17 +427,35 @@ export default function DashboardPage() {
     setIsGenerating(true)
     setRecipeResult(null)
     try {
-      const result = await generateRecipes(user.id, 'flexible', 2)
+      const result = await generateRecipes(user.id, 'flexible', 2, searchQuery.trim())
+
+      // Deduplicate by title (case-insensitive)
+      const seen = new Set<string>()
+      const unique = result.all_recipes.filter((r) => {
+        const key = r.title.toLowerCase()
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      result.all_recipes = unique
+      result.total_count = unique.length
+
       setRecipeResult(result)
 
-      // auto-save each generated recipe
-      const saves = result.all_recipes.map((r) =>
-        saveRecipe(user.id, r).catch(() => null)
-      )
-      await Promise.all(saves)
+      // Only auto-save real AI-generated recipes, not hardcoded mocks
+      if (!result.is_mock) {
+        const saves = result.all_recipes.map((r) =>
+          saveRecipe(user.id, r).catch(() => null)
+        )
+        await Promise.all(saves)
+      }
 
       if (result.total_count > 0) {
-        toast.success(`${result.total_count} recipe${result.total_count > 1 ? 's' : ''} generated`)
+        toast.success(
+          result.is_mock
+            ? 'Showing sample recipes (backend unavailable)'
+            : `${result.total_count} recipe${result.total_count > 1 ? 's' : ''} generated`
+        )
       } else {
         toast.info('No recipes could be generated from your pantry')
       }
