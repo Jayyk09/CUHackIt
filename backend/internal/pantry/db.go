@@ -10,11 +10,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-
 var (
-	ErrItemNotFound   = errors.New("pantry item not found")
-	ErrInvalidInput   = errors.New("invalid input")
-	ErrUnauthorized   = errors.New("unauthorized to access this item")
+	ErrItemNotFound = errors.New("pantry item not found")
+	ErrInvalidInput = errors.New("invalid input")
+	ErrUnauthorized = errors.New("unauthorized to access this item")
+	ErrUserNotFound = errors.New("user not found")
 )
 
 // FoodCategory represents the category of a food item
@@ -36,63 +36,63 @@ const (
 
 // PantryItem represents an item in a user's pantry
 type PantryItem struct {
-	ID                uuid.UUID    `json:"id"`
-	UserID            string       `json:"user_id"`
-	Name              string       `json:"name"`
-	Brand             *string      `json:"brand,omitempty"`
-	Barcode           *string      `json:"barcode,omitempty"`
-	OpenFoodFactsID   *string      `json:"open_food_facts_id,omitempty"`
-	Category          FoodCategory `json:"category"`
-	Quantity          float64      `json:"quantity"`
-	Unit              string       `json:"unit"`
-	PurchaseDate      *time.Time   `json:"purchase_date,omitempty"`
-	ExpirationDate    *time.Time   `json:"expiration_date,omitempty"`
-	ShelfLifeDays     *int         `json:"shelf_life_days,omitempty"`
-	CaloriesPerServing *float64    `json:"calories_per_serving,omitempty"`
-	ProteinG          *float64     `json:"protein_g,omitempty"`
-	CarbsG            *float64     `json:"carbs_g,omitempty"`
-	FatG              *float64     `json:"fat_g,omitempty"`
-	FiberG            *float64     `json:"fiber_g,omitempty"`
-	SugarG            *float64     `json:"sugar_g,omitempty"`
-	SodiumMg          *float64     `json:"sodium_mg,omitempty"`
-	ServingSize       *string      `json:"serving_size,omitempty"`
-	ImageURL          *string      `json:"image_url,omitempty"`
-	IsExpired         bool         `json:"is_expired"`
-	IsExpiringSoon    bool         `json:"is_expiring_soon"`
-	CreatedAt         time.Time    `json:"created_at"`
-	UpdatedAt         time.Time    `json:"updated_at"`
+	ID                 uuid.UUID    `json:"id"`
+	UserID             string       `json:"user_id"`
+	Name               string       `json:"name"`
+	Brand              *string      `json:"brand,omitempty"`
+	Barcode            *string      `json:"barcode,omitempty"`
+	OpenFoodFactsID    *string      `json:"open_food_facts_id,omitempty"`
+	Category           FoodCategory `json:"category"`
+	Quantity           float64      `json:"quantity"`
+	Unit               string       `json:"unit"`
+	PurchaseDate       *time.Time   `json:"purchase_date,omitempty"`
+	ExpirationDate     *time.Time   `json:"expiration_date,omitempty"`
+	ShelfLifeDays      *int         `json:"shelf_life_days,omitempty"`
+	CaloriesPerServing *float64     `json:"calories_per_serving,omitempty"`
+	ProteinG           *float64     `json:"protein_g,omitempty"`
+	CarbsG             *float64     `json:"carbs_g,omitempty"`
+	FatG               *float64     `json:"fat_g,omitempty"`
+	FiberG             *float64     `json:"fiber_g,omitempty"`
+	SugarG             *float64     `json:"sugar_g,omitempty"`
+	SodiumMg           *float64     `json:"sodium_mg,omitempty"`
+	ServingSize        *string      `json:"serving_size,omitempty"`
+	ImageURL           *string      `json:"image_url,omitempty"`
+	IsExpired          bool         `json:"is_expired"`
+	IsExpiringSoon     bool         `json:"is_expiring_soon"`
+	CreatedAt          time.Time    `json:"created_at"`
+	UpdatedAt          time.Time    `json:"updated_at"`
 }
 
 // CreateItemInput is the input for creating a new pantry item
 type CreateItemInput struct {
-	Name              string       `json:"name"`
-	Brand             *string      `json:"brand,omitempty"`
-	Barcode           *string      `json:"barcode,omitempty"`
-	OpenFoodFactsID   *string      `json:"open_food_facts_id,omitempty"`
-	Category          FoodCategory `json:"category"`
-	Quantity          float64      `json:"quantity"`
-	Unit              string       `json:"unit"`
-	ExpirationDate    *time.Time   `json:"expiration_date,omitempty"`
-	ShelfLifeDays     *int         `json:"shelf_life_days,omitempty"`
-	CaloriesPerServing *float64    `json:"calories_per_serving,omitempty"`
-	ProteinG          *float64     `json:"protein_g,omitempty"`
-	CarbsG            *float64     `json:"carbs_g,omitempty"`
-	FatG              *float64     `json:"fat_g,omitempty"`
-	FiberG            *float64     `json:"fiber_g,omitempty"`
-	SugarG            *float64     `json:"sugar_g,omitempty"`
-	SodiumMg          *float64     `json:"sodium_mg,omitempty"`
-	ServingSize       *string      `json:"serving_size,omitempty"`
-	ImageURL          *string      `json:"image_url,omitempty"`
+	Name               string       `json:"name"`
+	Brand              *string      `json:"brand,omitempty"`
+	Barcode            *string      `json:"barcode,omitempty"`
+	OpenFoodFactsID    *string      `json:"open_food_facts_id,omitempty"`
+	Category           FoodCategory `json:"category"`
+	Quantity           float64      `json:"quantity"`
+	Unit               string       `json:"unit"`
+	ExpirationDate     *time.Time   `json:"expiration_date,omitempty"`
+	ShelfLifeDays      *int         `json:"shelf_life_days,omitempty"`
+	CaloriesPerServing *float64     `json:"calories_per_serving,omitempty"`
+	ProteinG           *float64     `json:"protein_g,omitempty"`
+	CarbsG             *float64     `json:"carbs_g,omitempty"`
+	FatG               *float64     `json:"fat_g,omitempty"`
+	FiberG             *float64     `json:"fiber_g,omitempty"`
+	SugarG             *float64     `json:"sugar_g,omitempty"`
+	SodiumMg           *float64     `json:"sodium_mg,omitempty"`
+	ServingSize        *string      `json:"serving_size,omitempty"`
+	ImageURL           *string      `json:"image_url,omitempty"`
 }
 
 // UpdateItemInput is the input for updating a pantry item
 type UpdateItemInput struct {
-	Name           *string      `json:"name,omitempty"`
-	Brand          *string      `json:"brand,omitempty"`
+	Name           *string       `json:"name,omitempty"`
+	Brand          *string       `json:"brand,omitempty"`
 	Category       *FoodCategory `json:"category,omitempty"`
-	Quantity       *float64     `json:"quantity,omitempty"`
-	Unit           *string      `json:"unit,omitempty"`
-	ExpirationDate *time.Time   `json:"expiration_date,omitempty"`
+	Quantity       *float64      `json:"quantity,omitempty"`
+	Unit           *string       `json:"unit,omitempty"`
+	ExpirationDate *time.Time    `json:"expiration_date,omitempty"`
 }
 
 // Repository handles database operations for pantry items
@@ -319,6 +319,60 @@ func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 		return ErrItemNotFound
 	}
 	return nil
+}
+
+// AddToPantryInput is the input for the POST /pantry endpoint
+type AddToPantryInput struct {
+	Auth0ID  string `json:"auth0_id"`
+	FoodsID  int64  `json:"foods_id"`
+	Quantity int    `json:"quantity"`
+	IsFrozen bool   `json:"is_frozen"`
+}
+
+// SimplePantryEntry represents a row in the pantry table
+type SimplePantryEntry struct {
+	ID       int       `json:"id"`
+	UserID   string    `json:"user_id"`
+	FoodsID  int64     `json:"foods_id"`
+	Quantity int       `json:"quantity"`
+	IsFrozen bool      `json:"is_frozen"`
+	AddedAt  time.Time `json:"added_at"`
+}
+
+// AddToPantry looks up the user by auth0_id and inserts into the pantry table
+func (r *Repository) AddToPantry(ctx context.Context, input AddToPantryInput) (*SimplePantryEntry, error) {
+	if input.Auth0ID == "" || input.FoodsID <= 0 {
+		return nil, ErrInvalidInput
+	}
+
+	if input.Quantity <= 0 {
+		input.Quantity = 1
+	}
+
+	// Look up user_id from auth0_id
+	var userID string
+	err := r.pool.QueryRow(ctx, `SELECT id FROM users WHERE auth0_id = $1`, input.Auth0ID).Scan(&userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	// Insert into pantry table
+	var entry SimplePantryEntry
+	err = r.pool.QueryRow(ctx, `
+		INSERT INTO pantry_items (user_id, foods_id, quantity, is_frozen)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, user_id, foods_id, quantity, is_frozen, added_at
+	`, userID, input.FoodsID, input.Quantity, input.IsFrozen).Scan(
+		&entry.ID, &entry.UserID, &entry.FoodsID, &entry.Quantity, &entry.IsFrozen, &entry.AddedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &entry, nil
 }
 
 // GetCategorySummary returns count of items per category for a user
