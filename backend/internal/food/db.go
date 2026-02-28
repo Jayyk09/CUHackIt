@@ -2,18 +2,22 @@ package food
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/Jayyk09/CUHackIt/internal/database"
+	"github.com/jackc/pgx/v5"
 )
 
 const foodTable = "foods"
+
+var ErrProductNotFound = errors.New("product not found")
 
 type Product struct {
 	ID                     int64    `json:"id"`
 	ProductName            string   `json:"product_name"`
 	NormEnvironmentalScore *float64 `json:"norm_environmental_score"`
-	NutriscoreScore        *string  `json:"nutriscore_score"`
+	NutriscoreScore        *string  `json:"norm_nutriscore"`
 	LabelsEn               []string `json:"labels_en"`
 	AllergensEn            []string `json:"allergens_en"`
 	TracesEn               []string `json:"traces_en"`
@@ -32,7 +36,7 @@ func fetchProducts(ctx context.Context, db *database.DB, search string, limit, o
 		id,
 		product_name,
 		norm_environmental_score,
-		nutriscore_score,
+		norm_nutriscore,
 		labels_en,
 		allergens_en,
 		traces_en,
@@ -122,4 +126,45 @@ func updateProductMetadata(ctx context.Context, db *database.DB, id int64, categ
 	}
 
 	return nil
+}
+
+func getProductByID(ctx context.Context, db *database.DB, id int64) (*Product, error) {
+	if db == nil || db.Pool == nil {
+		return nil, fmt.Errorf("database connection is not initialized")
+	}
+
+	var product Product
+	err := db.Pool.QueryRow(ctx, fmt.Sprintf(`SELECT
+		id,
+		product_name,
+		norm_environmental_score,
+		norm_nutriscore,
+		labels_en,
+		allergens_en,
+		traces_en,
+		image_url,
+		image_small_url,
+		shelf_life,
+		category
+		FROM %s WHERE id = $1`, foodTable), id).Scan(
+		&product.ID,
+		&product.ProductName,
+		&product.NormEnvironmentalScore,
+		&product.NutriscoreScore,
+		&product.LabelsEn,
+		&product.AllergensEn,
+		&product.TracesEn,
+		&product.ImageURL,
+		&product.ImageSmallURL,
+		&product.ShelfLife,
+		&product.Category,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrProductNotFound
+		}
+		return nil, fmt.Errorf("query product: %w", err)
+	}
+
+	return &product, nil
 }
