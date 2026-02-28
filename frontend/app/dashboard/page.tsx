@@ -403,17 +403,17 @@ export default function DashboardPage() {
   const pantryAsFoodItems: FoodItem[] = useMemo(
     () =>
       pantryItems.map((p) => ({
-        id: p.id as unknown as number,
-        product_name: p.name,
-        category: p.category.toLowerCase(),
-        environmental_score: 0,
-        nutriscore_score: 0,
-        labels_en: [],
-        allergens_en: [],
-        traces_en: [],
-        shelf_life: p.shelf_life_days ?? 0,
-        is_spoiled: p.is_expired,
-        image_url: p.image_url ?? '/placeholder.jpg',
+        id: p.food_id,
+        product_name: p.product_name,
+        category: p.category?.toLowerCase() ?? 'specialty',
+        environmental_score: Math.round(p.norm_environmental_score ?? 0),
+        nutriscore_score: Math.round(p.nutriscore_score ?? 0),
+        labels_en: p.labels_en ?? [],
+        allergens_en: p.allergens_en ?? [],
+        traces_en: p.traces_en ?? [],
+        shelf_life: p.shelf_life ?? 0,
+        is_spoiled: false,
+        image_url: p.image_url ?? p.image_small_url ?? '/placeholder.jpg',
       })),
     [pantryItems]
   )
@@ -457,7 +457,7 @@ export default function DashboardPage() {
   }
 
   const handleAddToPantry = async (item: FoodItem, quantity: number, isFrozen: boolean) => {
-    if (pantryItems.some((p) => p.id === item.id)) {
+    if (pantryItems.some((p) => p.food_id === item.id)) {
       toast.info(`${item.product_name} is already in your pantry`)
       return
     }
@@ -474,7 +474,9 @@ export default function DashboardPage() {
         quantity,
         is_frozen: isFrozen,
       })
-      setPantryItems((prev) => [...prev, item])
+      // Re-fetch pantry to get the updated list with joined food data
+      const updated = await listPantryItems(user.id)
+      setPantryItems(updated)
       toast.success(`${item.product_name} added to pantry`)
       setSelectedFood(null)
     } catch (err) {
@@ -589,7 +591,7 @@ export default function DashboardPage() {
             item={selectedFood}
             onClose={() => setSelectedFood(null)}
             onAddToPantry={handleAddToPantry}
-            isInPantry={pantryItems.some((p) => p.id === selectedFood.id)}
+            isInPantry={pantryItems.some((p) => p.food_id === selectedFood.id)}
           />
         )}
       </AnimatePresence>

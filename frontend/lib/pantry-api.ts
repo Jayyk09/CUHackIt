@@ -1,31 +1,27 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
 
+/** Pantry item joined with food details from the backend */
 export interface PantryItem {
-  id: string
+  // pantry_items columns
+  id: number
   user_id: string
-  name: string
-  brand?: string
-  barcode?: string
-  open_food_facts_id?: string
-  category: string
+  food_id: number
   quantity: number
-  unit: string
-  purchase_date?: string
-  expiration_date?: string
-  shelf_life_days?: number
-  calories_per_serving?: number
-  protein_g?: number
-  carbs_g?: number
-  fat_g?: number
-  fiber_g?: number
-  sugar_g?: number
-  sodium_mg?: number
-  serving_size?: string
+  is_frozen: boolean
+  added_at: string
+
+  // foods columns (joined)
+  product_name: string
+  environmental_score?: number
+  nutriscore_score?: number
+  labels_en: string[]
+  allergens_en: string[]
+  traces_en: string[]
   image_url?: string
-  is_expired: boolean
-  is_expiring_soon: boolean
-  created_at: string
-  updated_at: string
+  image_small_url?: string
+  norm_environmental_score?: number
+  shelf_life?: number
+  category?: string
 }
 
 export interface CategorySummary {
@@ -47,19 +43,6 @@ export async function listPantryItems(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.error || 'Failed to fetch pantry items')
-  }
-  const data = await res.json()
-  return Array.isArray(data) ? data : []
-}
-
-/**
- * List pantry items that are expiring soon.
- */
-export async function listExpiringSoon(userId: string): Promise<PantryItem[]> {
-  const res = await fetch(`${API_BASE}/users/${userId}/pantry/expiring`)
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.error || 'Failed to fetch expiring items')
   }
   const data = await res.json()
   return Array.isArray(data) ? data : []

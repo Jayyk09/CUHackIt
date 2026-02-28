@@ -11,15 +11,12 @@ import (
 func RegisterRoutes(r *http.ServeMux, db *database.DB, log *logger.Logger) {
 	h := NewHandler(db, log)
 
-	// Pantry item CRUD (nested under users)
+	// Pantry item reads (nested under users)
 	r.HandleFunc("GET /users/{user_id}/pantry", h.ListItems)
-	r.HandleFunc("POST /users/{user_id}/pantry", h.CreateItem)
 	r.HandleFunc("GET /users/{user_id}/pantry/{id}", h.GetItem)
-	r.HandleFunc("PUT /users/{user_id}/pantry/{id}", h.UpdateItem)
 	r.HandleFunc("DELETE /users/{user_id}/pantry/{id}", h.DeleteItem)
 
-	// Special queries
-	r.HandleFunc("GET /users/{user_id}/pantry/expiring", h.ListExpiringSoon)
+	// Category summary
 	r.HandleFunc("GET /users/{user_id}/pantry/summary", h.GetCategorySummary)
 
 	// Simplified pantry endpoint (uses auth0_id to resolve user)

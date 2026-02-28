@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -17,82 +16,47 @@ var (
 	ErrUserNotFound = errors.New("user not found")
 )
 
-// FoodCategory represents the category of a food item
-type FoodCategory string
+// PantryItemWithFood represents a pantry_items row joined with the foods table.
+// This is what GET endpoints return.
+type PantryItemWithFood struct {
+	// pantry_items columns
+	ID       int       `json:"id"`
+	UserID   string    `json:"user_id"`
+	FoodID   int64     `json:"food_id"`
+	Quantity int       `json:"quantity"`
+	IsFrozen bool      `json:"is_frozen"`
+	AddedAt  time.Time `json:"added_at"`
 
-const (
-	CategoryProduce   FoodCategory = "PRODUCE"
-	CategoryDairy     FoodCategory = "DAIRY"
-	CategoryMeat      FoodCategory = "MEAT"
-	CategorySeafood   FoodCategory = "SEAFOOD"
-	CategoryPantry    FoodCategory = "PANTRY"
-	CategoryFrozen    FoodCategory = "FROZEN"
-	CategoryBakery    FoodCategory = "BAKERY"
-	CategorySnacks    FoodCategory = "SNACKS"
-	CategoryBeverage  FoodCategory = "BEVERAGE"
-	CategoryDeli      FoodCategory = "DELI"
-	CategorySpecialty FoodCategory = "SPECIALTY"
-)
-
-// PantryItem represents an item in a user's pantry
-type PantryItem struct {
-	ID                 uuid.UUID    `json:"id"`
-	UserID             string       `json:"user_id"`
-	Name               string       `json:"name"`
-	Brand              *string      `json:"brand,omitempty"`
-	Barcode            *string      `json:"barcode,omitempty"`
-	OpenFoodFactsID    *string      `json:"open_food_facts_id,omitempty"`
-	Category           FoodCategory `json:"category"`
-	Quantity           float64      `json:"quantity"`
-	Unit               string       `json:"unit"`
-	PurchaseDate       *time.Time   `json:"purchase_date,omitempty"`
-	ExpirationDate     *time.Time   `json:"expiration_date,omitempty"`
-	ShelfLifeDays      *int         `json:"shelf_life_days,omitempty"`
-	CaloriesPerServing *float64     `json:"calories_per_serving,omitempty"`
-	ProteinG           *float64     `json:"protein_g,omitempty"`
-	CarbsG             *float64     `json:"carbs_g,omitempty"`
-	FatG               *float64     `json:"fat_g,omitempty"`
-	FiberG             *float64     `json:"fiber_g,omitempty"`
-	SugarG             *float64     `json:"sugar_g,omitempty"`
-	SodiumMg           *float64     `json:"sodium_mg,omitempty"`
-	ServingSize        *string      `json:"serving_size,omitempty"`
-	ImageURL           *string      `json:"image_url,omitempty"`
-	IsExpired          bool         `json:"is_expired"`
-	IsExpiringSoon     bool         `json:"is_expiring_soon"`
-	CreatedAt          time.Time    `json:"created_at"`
-	UpdatedAt          time.Time    `json:"updated_at"`
+	// foods columns (joined)
+	ProductName            string   `json:"product_name"`
+	EnvironmentalScore     *float64 `json:"environmental_score,omitempty"`
+	NutriscoreScore        *float64 `json:"nutriscore_score,omitempty"`
+	LabelsEn               []string `json:"labels_en"`
+	AllergensEn            []string `json:"allergens_en"`
+	TracesEn               []string `json:"traces_en"`
+	ImageURL               *string  `json:"image_url,omitempty"`
+	ImageSmallURL          *string  `json:"image_small_url,omitempty"`
+	NormEnvironmentalScore *float64 `json:"norm_environmental_score,omitempty"`
+	ShelfLife              *int     `json:"shelf_life,omitempty"`
+	Category               *string  `json:"category,omitempty"`
 }
 
-// CreateItemInput is the input for creating a new pantry item
-type CreateItemInput struct {
-	Name               string       `json:"name"`
-	Brand              *string      `json:"brand,omitempty"`
-	Barcode            *string      `json:"barcode,omitempty"`
-	OpenFoodFactsID    *string      `json:"open_food_facts_id,omitempty"`
-	Category           FoodCategory `json:"category"`
-	Quantity           float64      `json:"quantity"`
-	Unit               string       `json:"unit"`
-	ExpirationDate     *time.Time   `json:"expiration_date,omitempty"`
-	ShelfLifeDays      *int         `json:"shelf_life_days,omitempty"`
-	CaloriesPerServing *float64     `json:"calories_per_serving,omitempty"`
-	ProteinG           *float64     `json:"protein_g,omitempty"`
-	CarbsG             *float64     `json:"carbs_g,omitempty"`
-	FatG               *float64     `json:"fat_g,omitempty"`
-	FiberG             *float64     `json:"fiber_g,omitempty"`
-	SugarG             *float64     `json:"sugar_g,omitempty"`
-	SodiumMg           *float64     `json:"sodium_mg,omitempty"`
-	ServingSize        *string      `json:"serving_size,omitempty"`
-	ImageURL           *string      `json:"image_url,omitempty"`
+// AddToPantryInput is the input for the POST /pantry endpoint
+type AddToPantryInput struct {
+	Auth0ID  string `json:"auth0_id"`
+	FoodID   int64  `json:"food_id"`
+	Quantity int    `json:"quantity"`
+	IsFrozen bool   `json:"is_frozen"`
 }
 
-// UpdateItemInput is the input for updating a pantry item
-type UpdateItemInput struct {
-	Name           *string       `json:"name,omitempty"`
-	Brand          *string       `json:"brand,omitempty"`
-	Category       *FoodCategory `json:"category,omitempty"`
-	Quantity       *float64      `json:"quantity,omitempty"`
-	Unit           *string       `json:"unit,omitempty"`
-	ExpirationDate *time.Time    `json:"expiration_date,omitempty"`
+// SimplePantryEntry represents a raw row in the pantry_items table (no join)
+type SimplePantryEntry struct {
+	ID       int       `json:"id"`
+	UserID   string    `json:"user_id"`
+	FoodID   int64     `json:"food_id"`
+	Quantity int       `json:"quantity"`
+	IsFrozen bool      `json:"is_frozen"`
+	AddedAt  time.Time `json:"added_at"`
 }
 
 // Repository handles database operations for pantry items
@@ -105,241 +69,141 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
-// Create creates a new pantry item
-func (r *Repository) Create(ctx context.Context, userID string, input CreateItemInput) (*PantryItem, error) {
-	if input.Name == "" || input.Category == "" {
-		return nil, ErrInvalidInput
-	}
+// columns selected for the joined query
+const pantryJoinSelect = `
+	p.id, p.user_id, p.food_id, p.quantity, p.is_frozen, p.added_at,
+	f.product_name,
+	f.environmental_score,
+	f.nutriscore_score,
+	f.labels_en,
+	f.allergens_en,
+	f.traces_en,
+	f.image_url,
+	f.image_small_url,
+	f.norm_environmental_score,
+	f.shelf_life,
+	f.category
+`
 
-	// Default values
-	if input.Quantity == 0 {
-		input.Quantity = 1
-	}
-	if input.Unit == "" {
-		input.Unit = "item"
-	}
-
-	var item PantryItem
-	err := r.pool.QueryRow(ctx, `
-		INSERT INTO pantry_items (
-			user_id, name, brand, barcode, open_food_facts_id, category,
-			quantity, unit, expiration_date, shelf_life_days,
-			calories_per_serving, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg,
-			serving_size, image_url
-		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-		RETURNING id, user_id, name, brand, barcode, open_food_facts_id, category,
-		          quantity, unit, purchase_date, expiration_date, shelf_life_days,
-		          calories_per_serving, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg,
-		          serving_size, image_url, is_expired, is_expiring_soon, created_at, updated_at
-	`, userID, input.Name, input.Brand, input.Barcode, input.OpenFoodFactsID, input.Category,
-		input.Quantity, input.Unit, input.ExpirationDate, input.ShelfLifeDays,
-		input.CaloriesPerServing, input.ProteinG, input.CarbsG, input.FatG, input.FiberG, input.SugarG, input.SodiumMg,
-		input.ServingSize, input.ImageURL).Scan(
-		&item.ID, &item.UserID, &item.Name, &item.Brand, &item.Barcode, &item.OpenFoodFactsID, &item.Category,
-		&item.Quantity, &item.Unit, &item.PurchaseDate, &item.ExpirationDate, &item.ShelfLifeDays,
-		&item.CaloriesPerServing, &item.ProteinG, &item.CarbsG, &item.FatG, &item.FiberG, &item.SugarG, &item.SodiumMg,
-		&item.ServingSize, &item.ImageURL, &item.IsExpired, &item.IsExpiringSoon, &item.CreatedAt, &item.UpdatedAt,
+// scanPantryItemWithFood scans a row from the joined query into a PantryItemWithFood.
+func scanPantryItemWithFood(scanner interface{ Scan(dest ...any) error }) (*PantryItemWithFood, error) {
+	var item PantryItemWithFood
+	err := scanner.Scan(
+		&item.ID, &item.UserID, &item.FoodID, &item.Quantity, &item.IsFrozen, &item.AddedAt,
+		&item.ProductName,
+		&item.EnvironmentalScore,
+		&item.NutriscoreScore,
+		&item.LabelsEn,
+		&item.AllergensEn,
+		&item.TracesEn,
+		&item.ImageURL,
+		&item.ImageSmallURL,
+		&item.NormEnvironmentalScore,
+		&item.ShelfLife,
+		&item.Category,
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	return &item, nil
+	return &item, err
 }
 
-// GetByID retrieves a pantry item by its ID
-func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*PantryItem, error) {
-	var item PantryItem
-	err := r.pool.QueryRow(ctx, `
-		SELECT id, user_id, name, brand, barcode, open_food_facts_id, category,
-		       quantity, unit, purchase_date, expiration_date, shelf_life_days,
-		       calories_per_serving, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg,
-		       serving_size, image_url, is_expired, is_expiring_soon, created_at, updated_at
-		FROM pantry_items
-		WHERE id = $1
-	`, id).Scan(
-		&item.ID, &item.UserID, &item.Name, &item.Brand, &item.Barcode, &item.OpenFoodFactsID, &item.Category,
-		&item.Quantity, &item.Unit, &item.PurchaseDate, &item.ExpirationDate, &item.ShelfLifeDays,
-		&item.CaloriesPerServing, &item.ProteinG, &item.CarbsG, &item.FatG, &item.FiberG, &item.SugarG, &item.SodiumMg,
-		&item.ServingSize, &item.ImageURL, &item.IsExpired, &item.IsExpiringSoon, &item.CreatedAt, &item.UpdatedAt,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrItemNotFound
-		}
-		return nil, err
-	}
-
-	return &item, nil
-}
-
-// ListByUserID retrieves all pantry items for a user
-func (r *Repository) ListByUserID(ctx context.Context, userID string) ([]PantryItem, error) {
+// ListByUserID retrieves all pantry items for a user, joined with food details.
+func (r *Repository) ListByUserID(ctx context.Context, userID string) ([]PantryItemWithFood, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, user_id, name, brand, barcode, open_food_facts_id, category,
-		       quantity, unit, purchase_date, expiration_date, shelf_life_days,
-		       calories_per_serving, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg,
-		       serving_size, image_url, is_expired, is_expiring_soon, created_at, updated_at
-		FROM pantry_items
-		WHERE user_id = $1
-		ORDER BY category, name
+		SELECT `+pantryJoinSelect+`
+		FROM pantry_items p
+		JOIN foods f ON f.id = p.food_id
+		WHERE p.user_id = $1
+		ORDER BY f.product_name
 	`, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var items []PantryItem
+	var items []PantryItemWithFood
 	for rows.Next() {
-		var item PantryItem
-		err := rows.Scan(
-			&item.ID, &item.UserID, &item.Name, &item.Brand, &item.Barcode, &item.OpenFoodFactsID, &item.Category,
-			&item.Quantity, &item.Unit, &item.PurchaseDate, &item.ExpirationDate, &item.ShelfLifeDays,
-			&item.CaloriesPerServing, &item.ProteinG, &item.CarbsG, &item.FatG, &item.FiberG, &item.SugarG, &item.SodiumMg,
-			&item.ServingSize, &item.ImageURL, &item.IsExpired, &item.IsExpiringSoon, &item.CreatedAt, &item.UpdatedAt,
-		)
+		item, err := scanPantryItemWithFood(rows)
 		if err != nil {
 			return nil, err
 		}
-		items = append(items, item)
+		items = append(items, *item)
 	}
 
 	return items, nil
 }
 
-// ListByCategory retrieves pantry items for a user filtered by category
-func (r *Repository) ListByCategory(ctx context.Context, userID string, category FoodCategory) ([]PantryItem, error) {
+// ListByCategory retrieves pantry items for a user filtered by food category.
+func (r *Repository) ListByCategory(ctx context.Context, userID string, category string) ([]PantryItemWithFood, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, user_id, name, brand, barcode, open_food_facts_id, category,
-		       quantity, unit, purchase_date, expiration_date, shelf_life_days,
-		       calories_per_serving, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg,
-		       serving_size, image_url, is_expired, is_expiring_soon, created_at, updated_at
-		FROM pantry_items
-		WHERE user_id = $1 AND category = $2
-		ORDER BY name
+		SELECT `+pantryJoinSelect+`
+		FROM pantry_items p
+		JOIN foods f ON f.id = p.food_id
+		WHERE p.user_id = $1 AND f.category = $2
+		ORDER BY f.product_name
 	`, userID, category)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var items []PantryItem
+	var items []PantryItemWithFood
 	for rows.Next() {
-		var item PantryItem
-		err := rows.Scan(
-			&item.ID, &item.UserID, &item.Name, &item.Brand, &item.Barcode, &item.OpenFoodFactsID, &item.Category,
-			&item.Quantity, &item.Unit, &item.PurchaseDate, &item.ExpirationDate, &item.ShelfLifeDays,
-			&item.CaloriesPerServing, &item.ProteinG, &item.CarbsG, &item.FatG, &item.FiberG, &item.SugarG, &item.SodiumMg,
-			&item.ServingSize, &item.ImageURL, &item.IsExpired, &item.IsExpiringSoon, &item.CreatedAt, &item.UpdatedAt,
-		)
+		item, err := scanPantryItemWithFood(rows)
 		if err != nil {
 			return nil, err
 		}
-		items = append(items, item)
+		items = append(items, *item)
 	}
 
 	return items, nil
 }
 
-// ListExpiringSoon retrieves pantry items that are expiring within 3 days
-func (r *Repository) ListExpiringSoon(ctx context.Context, userID string) ([]PantryItem, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, user_id, name, brand, barcode, open_food_facts_id, category,
-		       quantity, unit, purchase_date, expiration_date, shelf_life_days,
-		       calories_per_serving, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg,
-		       serving_size, image_url, is_expired, is_expiring_soon, created_at, updated_at
-		FROM pantry_items
-		WHERE user_id = $1 AND is_expiring_soon = TRUE
-		ORDER BY expiration_date
-	`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+// GetByID retrieves a single pantry item by its pantry_items.id, joined with food details.
+func (r *Repository) GetByID(ctx context.Context, id int) (*PantryItemWithFood, error) {
+	row := r.pool.QueryRow(ctx, `
+		SELECT `+pantryJoinSelect+`
+		FROM pantry_items p
+		JOIN foods f ON f.id = p.food_id
+		WHERE p.id = $1
+	`, id)
 
-	var items []PantryItem
-	for rows.Next() {
-		var item PantryItem
-		err := rows.Scan(
-			&item.ID, &item.UserID, &item.Name, &item.Brand, &item.Barcode, &item.OpenFoodFactsID, &item.Category,
-			&item.Quantity, &item.Unit, &item.PurchaseDate, &item.ExpirationDate, &item.ShelfLifeDays,
-			&item.CaloriesPerServing, &item.ProteinG, &item.CarbsG, &item.FatG, &item.FiberG, &item.SugarG, &item.SodiumMg,
-			&item.ServingSize, &item.ImageURL, &item.IsExpired, &item.IsExpiringSoon, &item.CreatedAt, &item.UpdatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-		items = append(items, item)
-	}
-
-	return items, nil
-}
-
-// Update updates a pantry item
-func (r *Repository) Update(ctx context.Context, id uuid.UUID, input UpdateItemInput) (*PantryItem, error) {
-	var item PantryItem
-	err := r.pool.QueryRow(ctx, `
-		UPDATE pantry_items
-		SET 
-			name = COALESCE($2, name),
-			brand = COALESCE($3, brand),
-			category = COALESCE($4, category),
-			quantity = COALESCE($5, quantity),
-			unit = COALESCE($6, unit),
-			expiration_date = COALESCE($7, expiration_date)
-		WHERE id = $1
-		RETURNING id, user_id, name, brand, barcode, open_food_facts_id, category,
-		          quantity, unit, purchase_date, expiration_date, shelf_life_days,
-		          calories_per_serving, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg,
-		          serving_size, image_url, is_expired, is_expiring_soon, created_at, updated_at
-	`, id, input.Name, input.Brand, input.Category, input.Quantity, input.Unit, input.ExpirationDate).Scan(
-		&item.ID, &item.UserID, &item.Name, &item.Brand, &item.Barcode, &item.OpenFoodFactsID, &item.Category,
-		&item.Quantity, &item.Unit, &item.PurchaseDate, &item.ExpirationDate, &item.ShelfLifeDays,
-		&item.CaloriesPerServing, &item.ProteinG, &item.CarbsG, &item.FatG, &item.FiberG, &item.SugarG, &item.SodiumMg,
-		&item.ServingSize, &item.ImageURL, &item.IsExpired, &item.IsExpiringSoon, &item.CreatedAt, &item.UpdatedAt,
-	)
+	item, err := scanPantryItemWithFood(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrItemNotFound
 		}
 		return nil, err
 	}
-
-	return &item, nil
+	return item, nil
 }
 
-// Delete removes a pantry item
-func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
-	result, err := r.pool.Exec(ctx, `DELETE FROM pantry_items WHERE id = $1`, id)
+// GetCategorySummary returns count of pantry items per food category for a user.
+func (r *Repository) GetCategorySummary(ctx context.Context, userID string) (map[string]int, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT f.category, COUNT(*) as count
+		FROM pantry_items p
+		JOIN foods f ON f.id = p.food_id
+		WHERE p.user_id = $1 AND f.category IS NOT NULL
+		GROUP BY f.category
+	`, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if result.RowsAffected() == 0 {
-		return ErrItemNotFound
+	defer rows.Close()
+
+	summary := make(map[string]int)
+	for rows.Next() {
+		var category string
+		var count int
+		if err := rows.Scan(&category, &count); err != nil {
+			return nil, err
+		}
+		summary[category] = count
 	}
-	return nil
+
+	return summary, nil
 }
 
-// AddToPantryInput is the input for the POST /pantry endpoint
-type AddToPantryInput struct {
-	Auth0ID  string `json:"auth0_id"`
-	FoodID   int64  `json:"food_id"`
-	Quantity int    `json:"quantity"`
-	IsFrozen bool   `json:"is_frozen"`
-}
-
-// SimplePantryEntry represents a row in the pantry table
-type SimplePantryEntry struct {
-	ID       int       `json:"id"`
-	UserID   string    `json:"user_id"`
-	FoodID   int64     `json:"food_id"`
-	Quantity int       `json:"quantity"`
-	IsFrozen bool      `json:"is_frozen"`
-	AddedAt  time.Time `json:"added_at"`
-}
-
-// AddToPantry looks up the user by auth0_id and inserts into the pantry table
+// AddToPantry looks up the user by auth0_id and inserts into the pantry table.
 func (r *Repository) AddToPantry(ctx context.Context, input AddToPantryInput) (*SimplePantryEntry, error) {
 	if input.Auth0ID == "" || input.FoodID <= 0 {
 		return nil, ErrInvalidInput
@@ -375,28 +239,14 @@ func (r *Repository) AddToPantry(ctx context.Context, input AddToPantryInput) (*
 	return &entry, nil
 }
 
-// GetCategorySummary returns count of items per category for a user
-func (r *Repository) GetCategorySummary(ctx context.Context, userID string) (map[FoodCategory]int, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT category, COUNT(*) as count
-		FROM pantry_items
-		WHERE user_id = $1
-		GROUP BY category
-	`, userID)
+// Delete removes a pantry item by its id.
+func (r *Repository) Delete(ctx context.Context, id int) error {
+	result, err := r.pool.Exec(ctx, `DELETE FROM pantry_items WHERE id = $1`, id)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defer rows.Close()
-
-	summary := make(map[FoodCategory]int)
-	for rows.Next() {
-		var category FoodCategory
-		var count int
-		if err := rows.Scan(&category, &count); err != nil {
-			return nil, err
-		}
-		summary[category] = count
+	if result.RowsAffected() == 0 {
+		return ErrItemNotFound
 	}
-
-	return summary, nil
+	return nil
 }
