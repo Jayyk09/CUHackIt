@@ -39,8 +39,8 @@ func Setup(r *http.ServeMux, db *database.DB, cfg *config.Config, log *logger.Lo
 	// Pantry routes
 	pantry.RegisterRoutes(r, db, log)
 
-	// Food search routes
-	food.RegisterRoutes(r, db, log)
+	// Food search routes (with optional Gemini enrichment)
+	food.RegisterRoutes(r, db, geminiClient, log)
 
 	// Recipe routes (with optional Gemini client)
 	recipes.RegisterRoutes(r, db, geminiClient, log)
