@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { FoodItem } from '@/lib/food-api'
 import { getCategoryImage } from '@/lib/category-images'
 import { useDebouncedSearch } from '@/hooks/use-debounced-search'
+import { SearchList } from '@/components/search-list'
 
 function SearchBar({
   value,
@@ -337,6 +338,8 @@ export default function DashboardPage() {
                   : 'Your pantry is empty'}
               </p>
             </div>
+          ) : isShowingSearchResults ? (
+            <SearchList items={displayItems} onItemClick={setSelectedItem} />
           ) : (
             <FoodGrid items={displayItems} onSelect={setSelectedItem} />
           )}
