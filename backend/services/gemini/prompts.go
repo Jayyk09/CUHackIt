@@ -28,7 +28,7 @@ The appropriate response would be:
 
 Now your turn. The input is given below. Respond with only the appropriate JSON.`
 
-const RecipePrompt = `You are a reccomendation engine for providing recipe reccomendations for food that is about to spoil in a given pantry. The pantry has limited ingredients. You will provide recipe names given a list of the ingredients in the pantry. Respond with a possible recipe using the ingredients in a JSON format. Give preference to simple, effective meals that use mostly ingredients in the pantry and to ingredients that are about to spoil within the next three days, indicated by is_spoiled: true. An example is shown below.
+const RecipePrompt = `You are a reccomendation engine for providing recipe reccomendations for food that is about to spoil in a given pantry. The pantry has limited ingredients. You will provide recipe names given a list of the ingredients in the pantry. Respond with a possible recipe using the ingredients in a JSON format. The recipe should be reasonable and something someone might actually cook. Give preference to simple, effective meals that use mostly ingredients in the pantry and to ingredients that are about to spoil within the next three days, indicated by is_spoiled: true. An example is shown below.
 
 If pantry is a JSON object given as:
 
@@ -89,4 +89,4 @@ An example appropriate response might be:
   }
 ]
 
-Now your turn. You will be provided with the pantry list. Respond with ONLY the JSON for appropriate recipe.`
+Now your turn. You will be provided with the pantry list. Respond with ONLY the JSON for appropriate, reasonable recipe.`
