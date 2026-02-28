@@ -30,6 +30,30 @@ export interface CategorySummary {
 }
 
 /**
+ * Calculate how many days remain before a pantry item expires.
+ * Uses: added_at + shelf_life (with 4x multiplier if frozen).
+ * Returns null if shelf_life is missing.
+ */
+export function getDaysRemaining(item: PantryItem): number | null {
+  if (item.shelf_life == null) return null
+  const shelfDays = item.is_frozen ? item.shelf_life * 4 : item.shelf_life
+  const addedAt = new Date(item.added_at)
+  const expiresAt = new Date(addedAt.getTime() + shelfDays * 24 * 60 * 60 * 1000)
+  const now = new Date()
+  return Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+/**
+ * Returns pantry items that are expiring within the given threshold (default 3 days).
+ */
+export function getExpiringItems(items: PantryItem[], thresholdDays = 3): PantryItem[] {
+  return items.filter((item) => {
+    const days = getDaysRemaining(item)
+    return days !== null && days <= thresholdDays
+  })
+}
+
+/**
  * List all pantry items for a user. Optionally filter by category.
  */
 export async function listPantryItems(

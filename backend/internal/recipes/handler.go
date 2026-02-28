@@ -66,7 +66,7 @@ func (h *Handler) getUserID(r *http.Request) (string, error) {
 
 // GenerateRecipesRequest is the request body for generating recipes
 type GenerateRecipesRequest struct {
-	Mode        string `json:"mode"`         // "pantry_only", "flexible", "both"
+	Mode        string `json:"mode"`         // "pantry_only", "flexible", "both", "spoiling"
 	RecipeCount int    `json:"recipe_count"` // 1-3
 	UserPrompt  string `json:"user_prompt"`  // Optional free-text (e.g. "grilled chicken")
 }
@@ -125,19 +125,44 @@ func (h *Handler) GenerateRecipes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert pantry items to agent format
+	// Convert pantry items to agent format with computed expiration data
 	agentPantryItems := make([]agents.PantryItem, len(pantryItems))
 	for i, item := range pantryItems {
 		category := ""
 		if item.Category != nil {
 			category = *item.Category
 		}
+
+		// Compute expiration from added_at + shelf_life
+		var expirationDate *time.Time
+		isExpiringSoon := false
+		isExpired := false
+		if item.ShelfLife != nil {
+			shelfDays := *item.ShelfLife
+			// Frozen items get 4x shelf life
+			if item.IsFrozen {
+				shelfDays *= 4
+			}
+			exp := item.AddedAt.AddDate(0, 0, shelfDays)
+			expirationDate = &exp
+			daysRemaining := int(time.Until(exp).Hours() / 24)
+			if daysRemaining <= 3 {
+				isExpiringSoon = true
+			}
+			if daysRemaining < 0 {
+				isExpired = true
+			}
+		}
+
 		agentPantryItems[i] = agents.PantryItem{
-			ID:       strconv.Itoa(item.ID),
-			Name:     item.ProductName,
-			Category: category,
-			Quantity: float64(item.Quantity),
-			Unit:     "item",
+			ID:             strconv.Itoa(item.ID),
+			Name:           item.ProductName,
+			Category:       category,
+			Quantity:       float64(item.Quantity),
+			Unit:           "item",
+			ExpirationDate: expirationDate,
+			IsExpiringSoon: isExpiringSoon,
+			IsExpired:      isExpired,
 		}
 	}
 
@@ -148,6 +173,8 @@ func (h *Handler) GenerateRecipes(w http.ResponseWriter, r *http.Request) {
 		mode = agents.ModeFlexible
 	case "both":
 		mode = agents.ModeBoth
+	case "spoiling":
+		mode = agents.ModeSpoiling
 	default:
 		mode = agents.ModePantryOnly
 	}
