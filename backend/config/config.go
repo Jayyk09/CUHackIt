@@ -9,10 +9,11 @@ import (
 
 type (
 	Config struct {
-		HTTP  HTTP
-		Log   Log
-		DB    DB
-		Auth0 Auth0
+		HTTP   HTTP
+		Log    Log
+		DB     DB
+		Auth0  Auth0
+		Gemini Gemini
 	}
 	HTTP struct {
 		Port string `env:"HTTP_PORT,required"`
@@ -29,6 +30,10 @@ type (
 		ClientSecret  string `env:"AUTH0_CLIENT_SECRET,required"`
 		CallbackURL   string `env:"AUTH0_CALLBACK_URL,required"`
 		SessionSecret string `env:"SESSION_SECRET,required"`
+	}
+	Gemini struct {
+		APIKey string `env:"GEMINI_API_KEY"`
+		Model  string `env:"GEMINI_MODEL" envDefault:"gemini-1.5-flash"`
 	}
 )
 
