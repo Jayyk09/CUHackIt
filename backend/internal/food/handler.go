@@ -5,17 +5,19 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Jayyk09/CUHackIt/internal/database"
 	"github.com/Jayyk09/CUHackIt/pkg/logger"
 )
 
 // Handler handles HTTP requests for food products
 type Handler struct {
+	db  *database.DB
 	log *logger.Logger
 }
 
 // NewHandler creates a new food handler
-func NewHandler(log *logger.Logger) *Handler {
-	return &Handler{log: log}
+func NewHandler(db *database.DB, log *logger.Logger) *Handler {
+	return &Handler{db: db, log: log}
 }
 
 // writeJSON writes a JSON response
@@ -32,105 +34,115 @@ func (h *Handler) writeError(w http.ResponseWriter, status int, message string) 
 	h.writeJSON(w, status, map[string]string{"error": message})
 }
 
-// SearchResponse is the response for search queries
-type SearchResponse struct {
-	Query    string        `json:"query"`
-	Count    int           `json:"count"`
-	Products []FoodProduct `json:"products"`
-}
-
-// Search handles GET /food/search?q=...&limit=...
+// Search handles GET /food/search?q=...&limit=...&offset=...
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
-	if query == "" {
-		h.writeError(w, http.StatusBadRequest, "query parameter 'q' is required")
-		return
-	}
 
-	if len(query) < 3 {
-		h.writeError(w, http.StatusBadRequest, "query must be at least 3 characters")
-		return
-	}
-
-	// Parse limit (default 20, max 50)
 	limit := 20
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if parsedLimit, err := strconv.Atoi(limitStr); err == nil {
-			if parsedLimit > 0 && parsedLimit <= 50 {
-				limit = parsedLimit
-			}
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 && parsedLimit <= 50 {
+			limit = parsedLimit
 		}
 	}
 
-	products := SearchProducts(query, limit)
+	offset := 0
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
 
-	h.writeJSON(w, http.StatusOK, SearchResponse{
-		Query:    query,
-		Count:    len(products),
-		Products: products,
+	products, err := fetchProducts(r.Context(), h.db, query, limit, offset)
+	if err != nil {
+		h.log.Error("Failed to search products: %v", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to search products")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"query":    query,
+		"count":    len(products),
+		"products": products,
 	})
 }
 
 // GetProduct handles GET /food/{id}
 func (h *Handler) GetProduct(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	if id == "" {
+	idStr := r.PathValue("id")
+	if idStr == "" {
 		h.writeError(w, http.StatusBadRequest, "product id is required")
 		return
 	}
 
-	product := GetProductByID(id)
-	if product == nil {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid product id")
+		return
+	}
+
+	products, err := fetchProducts(r.Context(), h.db, "", 1, 0)
+	_ = products
+	_ = id
+	// Look up by ID directly
+	rows, err2 := h.db.Pool.Query(r.Context(),
+		`SELECT id, product_name, norm_environmental_score, nutriscore_score,
+		 labels_en, allergens_en, traces_en, image_url, image_small_url, shelf_life, category
+		 FROM foods WHERE id = $1`, id)
+	if err2 != nil {
+		h.log.Error("Failed to get product: %v", err2)
+		h.writeError(w, http.StatusInternalServerError, "failed to get product")
+		return
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
 		h.writeError(w, http.StatusNotFound, "product not found")
+		return
+	}
+
+	var product Product
+	if err := rows.Scan(
+		&product.ID, &product.ProductName, &product.NormEnvironmentalScore,
+		&product.NutriscoreScore, &product.LabelsEn, &product.AllergensEn,
+		&product.TracesEn, &product.ImageURL, &product.ImageSmallURL,
+		&product.ShelfLife, &product.Category,
+	); err != nil {
+		h.log.Error("Failed to scan product: %v", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to get product")
 		return
 	}
 
 	h.writeJSON(w, http.StatusOK, product)
 }
 
-// ListByCategory handles GET /food/category/{category}
-func (h *Handler) ListByCategory(w http.ResponseWriter, r *http.Request) {
-	categoryStr := r.PathValue("category")
-	if categoryStr == "" {
-		h.writeError(w, http.StatusBadRequest, "category is required")
+// UpdateMetadata handles PATCH /food/{id}/metadata
+func (h *Handler) UpdateMetadata(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		h.writeError(w, http.StatusBadRequest, "product id is required")
 		return
 	}
 
-	category := FoodCategory(categoryStr)
-
-	// Parse limit (default 20, max 50)
-	limit := 20
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if parsedLimit, err := strconv.Atoi(limitStr); err == nil {
-			if parsedLimit > 0 && parsedLimit <= 50 {
-				limit = parsedLimit
-			}
-		}
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid product id")
+		return
 	}
 
-	products := GetProductsByCategory(category, limit)
-
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"category": category,
-		"count":    len(products),
-		"products": products,
-	})
-}
-
-// ListCategories handles GET /food/categories
-func (h *Handler) ListCategories(w http.ResponseWriter, r *http.Request) {
-	categories := GetAllCategories()
-
-	// Convert to a slice for better JSON output
-	type CategoryInfo struct {
-		Name  FoodCategory `json:"name"`
-		Count int          `json:"count"`
+	var body struct {
+		Category  *string `json:"category"`
+		ShelfLife *int    `json:"shelf_life"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
 
-	var result []CategoryInfo
-	for cat, count := range categories {
-		result = append(result, CategoryInfo{Name: cat, Count: count})
+	if err := updateProductMetadata(r.Context(), h.db, id, body.Category, body.ShelfLife); err != nil {
+		h.log.Error("Failed to update product metadata: %v", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to update product")
+		return
 	}
 
-	h.writeJSON(w, http.StatusOK, result)
+	w.WriteHeader(http.StatusNoContent)
 }
