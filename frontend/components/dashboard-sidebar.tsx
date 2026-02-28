@@ -7,6 +7,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/dashboard/pantry', label: 'Pantry' },
   { href: '/recipe', label: 'Recipes' },
+  { href: '/dashboard/insights', label: 'Insights' },
 ]
 
 export function DashboardSidebar() {
