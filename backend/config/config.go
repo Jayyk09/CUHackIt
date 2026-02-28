@@ -14,6 +14,7 @@ type (
 		DB     DB
 		Auth0  Auth0
 		Gemini Gemini
+		App    App
 	}
 	HTTP struct {
 		Port string `env:"HTTP_PORT,required"`
@@ -34,6 +35,9 @@ type (
 	Gemini struct {
 		APIKey string `env:"GEMINI_API_KEY"`
 		Model  string `env:"GEMINI_MODEL" envDefault:"gemini-1.5-flash"`
+	}
+	App struct {
+		FrontendURL string `env:"FRONTEND_URL" envDefault:"http://localhost:3000"`
 	}
 )
 

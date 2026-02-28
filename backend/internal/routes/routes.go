@@ -49,7 +49,7 @@ func Setup(r *http.ServeMux, db *database.DB, cfg *config.Config, log *logger.Lo
 	ws.RegisterRoutes(r, db, geminiClient, log)
 
 	// Auth routes
-	if err := auth.RegisterRoutes(r, cfg); err != nil {
+	if err := auth.RegisterRoutes(r, cfg, db); err != nil {
 		return fmt.Errorf("auth routes: %w", err)
 	}
 
