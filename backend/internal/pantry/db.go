@@ -37,6 +37,7 @@ type PantryItemWithFood struct {
 	ImageURL               *string  `json:"image_url,omitempty"`
 	ImageSmallURL          *string  `json:"image_small_url,omitempty"`
 	NormEnvironmentalScore *float64 `json:"norm_environmental_score,omitempty"`
+	NormNutriscoreScore    *float64 `json:"norm_nutriscore_score,omitempty"`
 	ShelfLife              *int     `json:"shelf_life,omitempty"`
 	Category               *string  `json:"category,omitempty"`
 }
@@ -81,6 +82,7 @@ const pantryJoinSelect = `
 	f.image_url,
 	f.image_small_url,
 	f.norm_environmental_score,
+	f.norm_nutriscore,
 	f.shelf_life,
 	f.category
 `
@@ -99,6 +101,7 @@ func scanPantryItemWithFood(scanner interface{ Scan(dest ...any) error }) (*Pant
 		&item.ImageURL,
 		&item.ImageSmallURL,
 		&item.NormEnvironmentalScore,
+		&item.NormNutriscoreScore,
 		&item.ShelfLife,
 		&item.Category,
 	)
