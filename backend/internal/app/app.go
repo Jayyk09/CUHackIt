@@ -28,7 +28,9 @@ func Run(cfg *config.Config) {
 	// Create basic router
 	r := http.NewServeMux()
 
-	routes.Setup(r, db, cfg)
+	if err := routes.Setup(r, db, cfg); err != nil {
+		l.Fatal("Failed to setup routes: %v", err)
+	}
 
 	if err := server.Start(cfg, r, l); err != nil {
 		l.Fatal("Server error: %v", err)

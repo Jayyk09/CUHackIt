@@ -13,8 +13,9 @@ type Client struct {
 	model  string
 }
 
-// New creates a new Gemini client using the provided API key.
-func New(ctx context.Context, apiKey string) (*Client, error) {
+// New creates a new Gemini client using the provided API key and model.
+// If model is empty, a default Gemini model is selected.
+func New(ctx context.Context, apiKey string, model string) (*Client, error) {
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,
@@ -22,10 +23,12 @@ func New(ctx context.Context, apiKey string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gemini client: %w", err)
 	}
-
+	if model == "" {
+		return nil, fmt.Errorf("gemini model is required")
+	}
 	return &Client{
 		client: client,
-		model:  "gemini-2.0-flash",
+		model:  model,
 	}, nil
 }
 
