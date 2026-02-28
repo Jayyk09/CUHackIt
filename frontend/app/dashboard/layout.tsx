@@ -1,4 +1,5 @@
 import { DashboardSidebar } from '@/components/dashboard-sidebar'
+import { Toaster } from '@/components/ui/sonner'
 
 export default function DashboardLayout({
   children,
@@ -11,6 +12,7 @@ export default function DashboardLayout({
       <main className="ml-72 min-h-screen">
         {children}
       </main>
+      <Toaster />
     </div>
   )
 }
