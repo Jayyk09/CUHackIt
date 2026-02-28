@@ -86,3 +86,40 @@ export async function searchFoodProducts({
 
   return data.map(mapProductToFoodItem)
 }
+
+export async function getAuthProfile(): Promise<{ sub: string } | null> {
+  try {
+    const res = await fetch(`${API_URL}/auth/profile`, {
+      method: 'GET',
+      credentials: 'include',
+    })
+    if (!res.ok) return null
+    return (await res.json()) as { sub: string }
+  } catch {
+    return null
+  }
+}
+
+export async function addToPantry({
+  auth0_id,
+  food_id,
+  quantity,
+  is_frozen,
+}: {
+  auth0_id: string
+  food_id: number
+  quantity: number
+  is_frozen: boolean
+}): Promise<void> {
+  const res = await fetch(`${API_URL}/pantry`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ auth0_id, food_id, quantity, is_frozen }),
+  })
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || `Failed to add to pantry (${res.status})`)
+  }
+}

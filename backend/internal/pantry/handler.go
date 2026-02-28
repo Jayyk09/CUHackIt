@@ -293,8 +293,8 @@ func (h *Handler) AddToPantry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if input.FoodsID <= 0 {
-		h.writeError(w, http.StatusBadRequest, "foods_id is required")
+	if input.FoodID <= 0 {
+		h.writeError(w, http.StatusBadRequest, "food_id is required")
 		return
 	}
 

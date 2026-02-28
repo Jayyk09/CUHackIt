@@ -324,7 +324,7 @@ func (r *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 // AddToPantryInput is the input for the POST /pantry endpoint
 type AddToPantryInput struct {
 	Auth0ID  string `json:"auth0_id"`
-	FoodsID  int64  `json:"foods_id"`
+	FoodID   int64  `json:"food_id"`
 	Quantity int    `json:"quantity"`
 	IsFrozen bool   `json:"is_frozen"`
 }
@@ -333,7 +333,7 @@ type AddToPantryInput struct {
 type SimplePantryEntry struct {
 	ID       int       `json:"id"`
 	UserID   string    `json:"user_id"`
-	FoodsID  int64     `json:"foods_id"`
+	FoodID   int64     `json:"food_id"`
 	Quantity int       `json:"quantity"`
 	IsFrozen bool      `json:"is_frozen"`
 	AddedAt  time.Time `json:"added_at"`
@@ -341,7 +341,7 @@ type SimplePantryEntry struct {
 
 // AddToPantry looks up the user by auth0_id and inserts into the pantry table
 func (r *Repository) AddToPantry(ctx context.Context, input AddToPantryInput) (*SimplePantryEntry, error) {
-	if input.Auth0ID == "" || input.FoodsID <= 0 {
+	if input.Auth0ID == "" || input.FoodID <= 0 {
 		return nil, ErrInvalidInput
 	}
 
@@ -362,11 +362,11 @@ func (r *Repository) AddToPantry(ctx context.Context, input AddToPantryInput) (*
 	// Insert into pantry table
 	var entry SimplePantryEntry
 	err = r.pool.QueryRow(ctx, `
-		INSERT INTO pantry_items (user_id, foods_id, quantity, is_frozen)
+		INSERT INTO pantry_items (user_id, food_id, quantity, is_frozen)
 		VALUES ($1, $2, $3, $4)
-		RETURNING id, user_id, foods_id, quantity, is_frozen, added_at
-	`, userID, input.FoodsID, input.Quantity, input.IsFrozen).Scan(
-		&entry.ID, &entry.UserID, &entry.FoodsID, &entry.Quantity, &entry.IsFrozen, &entry.AddedAt,
+		RETURNING id, user_id, food_id, quantity, is_frozen, added_at
+	`, userID, input.FoodID, input.Quantity, input.IsFrozen).Scan(
+		&entry.ID, &entry.UserID, &entry.FoodID, &entry.Quantity, &entry.IsFrozen, &entry.AddedAt,
 	)
 	if err != nil {
 		return nil, err
