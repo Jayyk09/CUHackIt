@@ -21,4 +21,7 @@ func RegisterRoutes(r *http.ServeMux, db *database.DB, log *logger.Logger) {
 	// Special queries
 	r.HandleFunc("GET /users/{user_id}/pantry/expiring", h.ListExpiringSoon)
 	r.HandleFunc("GET /users/{user_id}/pantry/summary", h.GetCategorySummary)
+
+	// Simplified pantry endpoint (uses auth0_id to resolve user)
+	r.HandleFunc("POST /pantry", h.AddToPantry)
 }

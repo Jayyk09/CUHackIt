@@ -35,6 +35,7 @@ func RegisterRoutes(r *http.ServeMux, cfg *config.Config, db *database.DB) (sess
 	r.HandleFunc("GET /login", h.Login)
 	r.HandleFunc("GET /callback", h.Callback)
 	r.HandleFunc("GET /logout", h.Logout)
+	r.Handle("GET /auth/profile", IsAuthenticated(store, http.HandlerFunc(h.Profile)))
 
 	return store, nil
 }

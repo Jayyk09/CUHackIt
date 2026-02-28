@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { FoodItem } from '@/lib/food-api'
+import { FoodItem, addToPantry } from '@/lib/food-api'
 import { getCategoryImage } from '@/lib/category-images'
 import { useDebouncedSearch } from '@/hooks/use-debounced-search'
 import { generateRecipes, saveRecipe } from '@/lib/recipes-api'
@@ -84,9 +84,12 @@ function FoodDetailModal({
 }: {
   item: FoodItem
   onClose: () => void
-  onAddToPantry: (item: FoodItem) => void
+  onAddToPantry: (item: FoodItem, quantity: number, isFrozen: boolean) => void
   isInPantry: boolean
 }) {
+  const [quantity, setQuantity] = useState(1)
+  const [isFrozen, setIsFrozen] = useState(false)
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -234,9 +237,46 @@ function FoodDetailModal({
             </div>
 
             {!isInPantry && (
-              <div className="pt-6 border-t border-espresso/10">
+              <div className="pt-6 border-t border-espresso/10 space-y-4">
+                <div className="flex items-center gap-6">
+                  <div className="flex-1">
+                    <p className="font-sans text-xs uppercase tracking-[0.2em] text-espresso/50 mb-2">
+                      Quantity
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                        className="w-8 h-8 border border-espresso/20 font-sans text-sm text-espresso hover:bg-espresso/5 transition-colors flex items-center justify-center"
+                      >
+                        -
+                      </button>
+                      <span className="font-sans text-lg text-espresso w-8 text-center">{quantity}</span>
+                      <button
+                        onClick={() => setQuantity((q) => q + 1)}
+                        className="w-8 h-8 border border-espresso/20 font-sans text-sm text-espresso hover:bg-espresso/5 transition-colors flex items-center justify-center"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-sans text-xs uppercase tracking-[0.2em] text-espresso/50 mb-2">
+                      Frozen
+                    </p>
+                    <button
+                      onClick={() => setIsFrozen((f) => !f)}
+                      className={`px-4 py-2 border font-sans text-xs uppercase tracking-[0.2em] transition-colors duration-200 ${
+                        isFrozen
+                          ? 'border-sage bg-sage text-cream'
+                          : 'border-espresso/20 text-espresso/60 hover:border-espresso/40'
+                      }`}
+                    >
+                      {isFrozen ? 'Yes' : 'No'}
+                    </button>
+                  </div>
+                </div>
                 <button
-                  onClick={() => onAddToPantry(item)}
+                  onClick={() => onAddToPantry(item, quantity, isFrozen)}
                   className="w-full py-3 px-6 border border-sage text-sage font-sans text-xs uppercase tracking-[0.2em] hover:bg-sage hover:text-cream transition-colors duration-200"
                 >
                   Add to Pantry
@@ -331,7 +371,7 @@ function SearchBar({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { user, isLoading: isUserLoading } = useUser()
+  const { user } = useUser()
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMode, setSearchMode] = useState<SearchMode>('food')
 
@@ -382,14 +422,30 @@ export default function DashboardPage() {
     }
   }
 
-  const handleAddToPantry = (item: FoodItem) => {
+  const handleAddToPantry = async (item: FoodItem, quantity: number, isFrozen: boolean) => {
     if (pantryItems.some((p) => p.id === item.id)) {
       toast.info(`${item.product_name} is already in your pantry`)
       return
     }
-    setPantryItems((prev) => [...prev, item])
-    toast.success(`${item.product_name} added to pantry`)
-    setSelectedFood(null)
+
+    if (!user) {
+      toast.error('You must be logged in to add items to your pantry')
+      return
+    }
+
+    try {
+      await addToPantry({
+        auth0_id: user.auth0_id,
+        food_id: item.id,
+        quantity,
+        is_frozen: isFrozen,
+      })
+      setPantryItems((prev) => [...prev, item])
+      toast.success(`${item.product_name} added to pantry`)
+      setSelectedFood(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add to pantry')
+    }
   }
 
   return (

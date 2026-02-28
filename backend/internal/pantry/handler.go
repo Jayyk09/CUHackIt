@@ -279,3 +279,39 @@ func (h *Handler) GetCategorySummary(w http.ResponseWriter, r *http.Request) {
 
 	h.writeJSON(w, http.StatusOK, summary)
 }
+
+// AddToPantry handles POST /pantry
+func (h *Handler) AddToPantry(w http.ResponseWriter, r *http.Request) {
+	var input AddToPantryInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if input.Auth0ID == "" {
+		h.writeError(w, http.StatusBadRequest, "auth0_id is required")
+		return
+	}
+
+	if input.FoodID <= 0 {
+		h.writeError(w, http.StatusBadRequest, "food_id is required")
+		return
+	}
+
+	entry, err := h.repo.AddToPantry(r.Context(), input)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			h.writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		if errors.Is(err, ErrInvalidInput) {
+			h.writeError(w, http.StatusBadRequest, "invalid input")
+			return
+		}
+		h.log.Error("Failed to add pantry entry: %v", err)
+		h.writeError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	h.writeJSON(w, http.StatusCreated, entry)
+}
