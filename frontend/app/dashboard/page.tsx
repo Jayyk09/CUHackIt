@@ -407,7 +407,7 @@ export default function DashboardPage() {
         product_name: p.product_name,
         category: p.category?.toLowerCase() ?? 'specialty',
         environmental_score: Math.round(p.norm_environmental_score ?? 0),
-        nutriscore_score: Math.round(p.nutriscore_score ?? 0),
+        nutriscore_score: Math.round(p.norm_nutriscore_score ?? 0),
         labels_en: p.labels_en ?? [],
         allergens_en: p.allergens_en ?? [],
         traces_en: p.traces_en ?? [],

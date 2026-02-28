@@ -20,6 +20,7 @@ export interface PantryItem {
   image_url?: string
   image_small_url?: string
   norm_environmental_score?: number
+  norm_nutriscore_score?: number
   shelf_life?: number
   category?: string
 }
