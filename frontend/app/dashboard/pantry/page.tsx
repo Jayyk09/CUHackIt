@@ -166,13 +166,13 @@ function PantryItemRow({
 
       {/* Scores */}
       <div className="hidden md:flex items-center gap-4 flex-shrink-0">
-        {item.nutriscore_score != null && (
+        {item.norm_nutriscore_score != null && (
           <div className="text-right">
             <p className="text-[9px] tracking-[0.15em] uppercase text-espresso/35 mb-0.5">
               Nutri
             </p>
             <p className="font-serif text-xl text-espresso/70 leading-none">
-              {Math.round(item.nutriscore_score)}
+              {Math.round(item.norm_nutriscore_score)}
             </p>
           </div>
         )}
