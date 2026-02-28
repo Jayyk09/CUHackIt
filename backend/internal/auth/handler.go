@@ -111,12 +111,13 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Redirect to the frontend — new users go to /onboarding with their user ID.
+	// Redirect to the frontend with the Auth0 sub so the frontend can resolve the internal user ID.
+	// New users go to /onboarding; existing users go to /dashboard.
 	frontendURL := h.cfg.App.FrontendURL
 	if isNew {
 		http.Redirect(w, r, frontendURL+"/onboarding?uid="+url.QueryEscape(sub), http.StatusTemporaryRedirect)
 	} else {
-		http.Redirect(w, r, frontendURL, http.StatusTemporaryRedirect)
+		http.Redirect(w, r, frontendURL+"/dashboard?uid="+url.QueryEscape(sub), http.StatusTemporaryRedirect)
 	}
 }
 
