@@ -7,6 +7,7 @@ import (
 	"github.com/Jayyk09/CUHackIt/cmd/server"
 	"github.com/Jayyk09/CUHackIt/config"
 	"github.com/Jayyk09/CUHackIt/internal/database"
+	"github.com/Jayyk09/CUHackIt/internal/middleware"
 	"github.com/Jayyk09/CUHackIt/internal/routes"
 	"github.com/Jayyk09/CUHackIt/pkg/logger"
 )
@@ -35,7 +36,9 @@ func Run(cfg *config.Config) {
 
 	l.Info("Routes registered")
 
-	if err := server.Start(cfg, r, l); err != nil {
+	handler := middleware.CORS(cfg, r)
+
+	if err := server.Start(cfg, handler, l); err != nil {
 		l.Fatal("Server error: %v", err)
 	}
 }

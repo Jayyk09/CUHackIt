@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { FoodItem, mockSearchProducts } from '@/lib/mock-data'
+import { FoodItem, searchFoodProducts } from '@/lib/food-api'
 
 interface UseDebouncedSearchResult {
   results: FoodItem[]
@@ -19,6 +19,7 @@ export function useDebouncedSearch(query: string): UseDebouncedSearchResult {
   const [results, setResults] = useState<FoodItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const isSearching = query.length >= 3
 
@@ -40,15 +41,31 @@ export function useDebouncedSearch(query: string): UseDebouncedSearchResult {
 
     // Debounce the search
     timeoutRef.current = setTimeout(() => {
-      // In the future, this will be an API call:
-      // const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
-      // const data = await response.json()
-      // setResults(data.results)
-      
-      // For now, use mock data
-      const searchResults = mockSearchProducts(query)
-      setResults(searchResults)
-      setIsLoading(false)
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
+
+      console.info('search request start', { query })
+      searchFoodProducts({
+        search: query,
+        limit: 12,
+        offset: 0,
+        signal: controller.signal,
+      })
+        .then((searchResults) => {
+          console.info('search request success', { query, count: searchResults.length })
+          setResults(searchResults)
+        })
+        .catch((err: unknown) => {
+          if (err instanceof Error && err.name === 'AbortError') {
+            return
+          }
+          console.error('search request failed', { query, err })
+          setResults([])
+        })
+        .finally(() => {
+          setIsLoading(false)
+        })
     }, 300)
 
     // Cleanup
@@ -56,6 +73,7 @@ export function useDebouncedSearch(query: string): UseDebouncedSearchResult {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
       }
+      abortRef.current?.abort()
     }
   }, [query, isSearching])
 

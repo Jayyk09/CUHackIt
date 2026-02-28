@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	ErrNoAPIKey       = errors.New("gemini API key not configured")
-	ErrGenerationFail = errors.New("failed to generate content")
+	ErrNoAPIKey        = errors.New("gemini API key not configured")
+	ErrGenerationFail  = errors.New("failed to generate content")
 	ErrInvalidResponse = errors.New("invalid response from Gemini")
 )
 
@@ -26,39 +26,39 @@ type Client struct {
 
 // Recipe represents a generated recipe
 type Recipe struct {
-	Title            string       `json:"title"`
-	Description      string       `json:"description"`
-	Cuisine          string       `json:"cuisine,omitempty"`
-	PrepTimeMinutes  int          `json:"prep_time_minutes,omitempty"`
-	CookTimeMinutes  int          `json:"cook_time_minutes,omitempty"`
-	Servings         int          `json:"servings,omitempty"`
-	Difficulty       string       `json:"difficulty,omitempty"`
-	Ingredients      []Ingredient `json:"ingredients"`
-	Instructions     []string     `json:"instructions"`
-	MissingItems     []Ingredient `json:"missing_items,omitempty"`
-	CaloriesPerServing float64    `json:"calories_per_serving,omitempty"`
-	ProteinG         float64      `json:"protein_g,omitempty"`
-	CarbsG           float64      `json:"carbs_g,omitempty"`
-	FatG             float64      `json:"fat_g,omitempty"`
-	Tags             []string     `json:"tags,omitempty"`
+	Title              string       `json:"title"`
+	Description        string       `json:"description"`
+	Cuisine            string       `json:"cuisine,omitempty"`
+	PrepTimeMinutes    int          `json:"prep_time_minutes,omitempty"`
+	CookTimeMinutes    int          `json:"cook_time_minutes,omitempty"`
+	Servings           int          `json:"servings,omitempty"`
+	Difficulty         string       `json:"difficulty,omitempty"`
+	Ingredients        []Ingredient `json:"ingredients"`
+	Instructions       []string     `json:"instructions"`
+	MissingItems       []Ingredient `json:"missing_items,omitempty"`
+	CaloriesPerServing float64      `json:"calories_per_serving,omitempty"`
+	ProteinG           float64      `json:"protein_g,omitempty"`
+	CarbsG             float64      `json:"carbs_g,omitempty"`
+	FatG               float64      `json:"fat_g,omitempty"`
+	Tags               []string     `json:"tags,omitempty"`
 }
 
 // Ingredient represents an ingredient in a recipe
 type Ingredient struct {
-	Name       string  `json:"name"`
-	Amount     string  `json:"amount"`
-	Unit       string  `json:"unit,omitempty"`
-	FromPantry bool    `json:"from_pantry"`
+	Name       string `json:"name"`
+	Amount     string `json:"amount"`
+	Unit       string `json:"unit,omitempty"`
+	FromPantry bool   `json:"from_pantry"`
 }
 
 // PantryItem represents an item in the user's pantry for recipe generation
 type PantryItem struct {
-	Name           string  `json:"name"`
-	Quantity       float64 `json:"quantity"`
-	Unit           string  `json:"unit"`
-	Category       string  `json:"category"`
-	IsExpiringSoon bool    `json:"is_expiring_soon"`
-	DaysUntilExpiry int    `json:"days_until_expiry,omitempty"`
+	Name            string  `json:"name"`
+	Quantity        float64 `json:"quantity"`
+	Unit            string  `json:"unit"`
+	Category        string  `json:"category"`
+	IsExpiringSoon  bool    `json:"is_expiring_soon"`
+	DaysUntilExpiry int     `json:"days_until_expiry,omitempty"`
 }
 
 // UserPreferences contains user dietary preferences for recipe generation
@@ -72,11 +72,11 @@ type UserPreferences struct {
 
 // GenerateRecipesRequest is the input for recipe generation
 type GenerateRecipesRequest struct {
-	PantryItems    []PantryItem    `json:"pantry_items"`
-	Preferences    UserPreferences `json:"preferences"`
-	RecipeCount    int             `json:"recipe_count"`
-	PantryOnly     bool            `json:"pantry_only"`      // If true, only use pantry items
-	MaxMissingItems int            `json:"max_missing_items"` // Max additional items (0 for pantry-only)
+	PantryItems     []PantryItem    `json:"pantry_items"`
+	Preferences     UserPreferences `json:"preferences"`
+	RecipeCount     int             `json:"recipe_count"`
+	PantryOnly      bool            `json:"pantry_only"`       // If true, only use pantry items
+	MaxMissingItems int             `json:"max_missing_items"` // Max additional items (0 for pantry-only)
 }
 
 // NewClient creates a new Gemini client
@@ -95,7 +95,7 @@ func NewClient(ctx context.Context, apiKey string, modelName string, log *logger
 	}
 
 	model := client.GenerativeModel(modelName)
-	
+
 	// Configure the model for JSON output
 	model.SetTemperature(0.7)
 	model.SetTopK(40)
@@ -153,8 +153,14 @@ func (c *Client) GenerateRecipes(ctx context.Context, req GenerateRecipesRequest
 	return result.Recipes, nil
 }
 
+// CategorizedFood represents Gemini categorization output
+type CategorizedFood struct {
+	Category  string
+	ShelfLife int
+}
+
 // CategorizeFood categorizes food items using AI
-func (c *Client) CategorizeFood(ctx context.Context, items []string) (map[string]string, error) {
+func (c *Client) CategorizeFood(ctx context.Context, items []string) (map[string]CategorizedFood, error) {
 	input, _ := json.Marshal(items)
 	prompt := CategorizerPrompt + "\n\n" + string(input)
 
@@ -181,9 +187,12 @@ func (c *Client) CategorizeFood(ctx context.Context, items []string) (map[string
 		return nil, fmt.Errorf("%w: %v", ErrInvalidResponse, err)
 	}
 
-	categories := make(map[string]string)
+	categories := make(map[string]CategorizedFood)
 	for _, item := range result {
-		categories[item.FoodName] = item.Category
+		categories[item.FoodName] = CategorizedFood{
+			Category:  item.Category,
+			ShelfLife: item.ShelfLife,
+		}
 	}
 
 	return categories, nil
