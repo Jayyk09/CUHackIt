@@ -20,12 +20,7 @@ type (
 		Level string `env:"LOG_LEVEL,required"`
 	}
 	DB struct {
-		Host   string `env:"DB_HOST,required"`
-		Port   string `env:"DB_PORT,required"`
-		DBUser string `env:"DB_USER,required"`
-		DBPass string `env:"DB_PASSWORD,required"`
-		DBName string `env:"DB_NAME,required"`
-		URL    string `env:"DB_URL,required"`
+		URL string `env:"DATABASE_URL,required"`
 	}
 )
 

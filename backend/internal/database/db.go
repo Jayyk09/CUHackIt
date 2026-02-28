@@ -11,8 +11,12 @@ type DB struct {
 	Pool *pgxpool.Pool
 }
 
-func New(ctx context.Context, databaseURL string) (*DB, error) {
-	pool, err := pgxpool.New(ctx, databaseURL)
+func New(ctx context.Context, connectionString string) (*DB, error) {
+	if connectionString == "" {
+		return nil, fmt.Errorf("database connection string is empty")
+	}
+
+	pool, err := pgxpool.New(ctx, connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to database: %w", err)
 	}
