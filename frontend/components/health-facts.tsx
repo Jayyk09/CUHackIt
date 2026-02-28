@@ -4,44 +4,45 @@ import { useRef } from 'react'
 import { motion, useInView } from 'framer-motion'
 
 const SAGE = '#4A5D4E'
+const ESPRESSO = '#2A2724'
 
-interface FactRow {
-  stat: string
-  statValue: number
+interface HealthStat {
+  percentage: string
+  value: number
   description: string
   graphType: 'ring' | 'bars' | 'arc' | 'blocks'
 }
 
-const healthFacts: FactRow[] = [
+const healthStats: HealthStat[] = [
   {
-    stat: '50%',
-    statValue: 50,
+    percentage: '50%',
+    value: 50,
     description: 'of Americans have prediabetes or diabetes. Half the country is metabolically broken before they feel a single symptom.',
     graphType: 'ring',
   },
   {
-    stat: '75%',
-    statValue: 75,
+    percentage: '75%',
+    value: 75,
     description: 'of adults have at least one chronic condition. Three in four people are fighting something that food could help prevent.',
     graphType: 'bars',
   },
   {
-    stat: '90%',
-    statValue: 90,
+    percentage: '90%',
+    value: 90,
     description: 'of U.S. healthcare spending goes toward treating chronic disease, much of which is diet-linked. We treat symptoms, not causes.',
     graphType: 'arc',
   },
   {
-    stat: '70%',
-    statValue: 70,
+    percentage: '70%',
+    value: 70,
     description: "of an American child's diet is ultra-processed. In many other countries, that figure is below 20%.",
     graphType: 'blocks',
   },
 ]
 
-function RingGraph({ value, inView }: { value: number; inView: boolean }) {
-  const size = 100
-  const strokeWidth = 3
+function RingChart({ value, inView }: { value: number; inView: boolean }) {
+  const size = 240
+  const strokeWidth = 1.5
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (value / 100) * circumference
@@ -53,9 +54,8 @@ function RingGraph({ value, inView }: { value: number; inView: boolean }) {
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke="currentColor"
+        stroke={`${ESPRESSO}1A`}
         strokeWidth={strokeWidth}
-        className="text-foreground/10"
       />
       <motion.circle
         cx={size / 2}
@@ -68,59 +68,64 @@ function RingGraph({ value, inView }: { value: number; inView: boolean }) {
         strokeDasharray={circumference}
         initial={{ strokeDashoffset: circumference }}
         animate={inView ? { strokeDashoffset: offset } : { strokeDashoffset: circumference }}
-        transition={{ duration: 1.4, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 1.8, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
       />
     </svg>
   )
 }
 
-function BarsGraph({ value, inView }: { value: number; inView: boolean }) {
+function BarsChart({ value, inView }: { value: number; inView: boolean }) {
   const bars = [
-    { h: value * 0.5, delay: 0.4 },
-    { h: value * 0.7, delay: 0.5 },
-    { h: value, delay: 0.6 },
-    { h: value * 0.85, delay: 0.7 },
-    { h: value * 0.6, delay: 0.8 },
+    { h: value * 0.6, delay: 0.3 },
+    { h: value * 0.8, delay: 0.4 },
+    { h: value, delay: 0.5 },
+    { h: value * 0.9, delay: 0.6 },
+    { h: value * 0.7, delay: 0.7 },
   ]
 
+  const maxHeight = 180
+
   return (
-    <svg width={80} height={60} className="overflow-visible">
-      {bars.map((bar, i) => (
-        <motion.rect
-          key={i}
-          x={i * 16}
-          y={60}
-          width={12}
-          height={0}
-          fill={SAGE}
-          initial={{ height: 0, y: 60 }}
-          animate={inView ? { height: (bar.h / 100) * 50, y: 60 - (bar.h / 100) * 50 } : { height: 0, y: 60 }}
-          transition={{ duration: 0.7, delay: bar.delay, ease: [0.22, 1, 0.36, 1] }}
-        />
-      ))}
+    <svg width={240} height={200} viewBox="0 0 240 200">
+      {bars.map((bar, i) => {
+        const barHeight = (bar.h / 100) * maxHeight
+        return (
+          <motion.rect
+            key={i}
+            x={i * 48}
+            y={maxHeight - barHeight + 10}
+            width={36}
+            height={barHeight}
+            fill={SAGE}
+            rx={1}
+            initial={{ height: 0, y: maxHeight + 10 }}
+            animate={inView ? { height: barHeight, y: maxHeight - barHeight + 10 } : { height: 0, y: maxHeight + 10 }}
+            transition={{ duration: 0.8, delay: bar.delay, ease: [0.22, 1, 0.36, 1] }}
+          />
+        )
+      })}
     </svg>
   )
 }
 
-function ArcGraph({ value, inView }: { value: number; inView: boolean }) {
-  const width = 100
-  const height = 50
-  const strokeWidth = 3
-  const radius = 45
+function ArcChart({ value, inView }: { value: number; inView: boolean }) {
+  const width = 240
+  const height = 140
+  const strokeWidth = 1.5
+  const radius = 110
   const circumference = Math.PI * radius
   const offset = circumference - (value / 100) * circumference
 
   return (
-    <svg width={width} height={height + 5} className="overflow-visible">
+    <svg width={width} height={height} className="overflow-visible">
       <path
-        d={`M 5 ${height} A ${radius} ${radius} 0 0 1 ${width - 5} ${height}`}
+        d={`M 10 ${height - 10} A ${radius} ${radius} 0 0 1 ${width - 10} ${height - 10}`}
         fill="none"
-        stroke="currentColor"
+        stroke={`${ESPRESSO}1A`}
         strokeWidth={strokeWidth}
-        className="text-foreground/10"
       />
       <motion.path
-        d={`M 5 ${height} A ${radius} ${radius} 0 0 1 ${width - 5} ${height}`}
+        d={`M 10 ${height - 10} A ${radius} ${radius} 0 0 1 ${width - 10} ${height - 10}`}
         fill="none"
         stroke={SAGE}
         strokeWidth={strokeWidth}
@@ -128,80 +133,88 @@ function ArcGraph({ value, inView }: { value: number; inView: boolean }) {
         strokeDasharray={circumference}
         initial={{ strokeDashoffset: circumference }}
         animate={inView ? { strokeDashoffset: offset } : { strokeDashoffset: circumference }}
-        transition={{ duration: 1.2, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 1.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
       />
     </svg>
   )
 }
 
-function BlocksGraph({ value, inView }: { value: number; inView: boolean }) {
+function BlocksChart({ value, inView }: { value: number; inView: boolean }) {
   const totalBlocks = 10
   const filledBlocks = Math.round((value / 100) * totalBlocks)
 
   return (
-    <div className="flex gap-1.5">
+    <div className="flex gap-3" style={{ width: 240, justifyContent: 'center' }}>
       {Array.from({ length: totalBlocks }).map((_, i) => (
         <motion.div
           key={i}
-          className="w-2 h-8"
-          style={{ backgroundColor: i < filledBlocks ? SAGE : 'currentColor' }}
+          className="h-32"
+          style={{ 
+            width: 16,
+            backgroundColor: i < filledBlocks ? SAGE : `${ESPRESSO}1A`,
+            borderRadius: 1
+          }}
           initial={{ opacity: 0, scaleY: 0 }}
-          animate={inView ? { opacity: i < filledBlocks ? 1 : 0.1, scaleY: 1 } : { opacity: 0, scaleY: 0 }}
-          transition={{ duration: 0.4, delay: 0.4 + i * 0.05, ease: [0.22, 1, 0.36, 1] }}
+          animate={inView ? { opacity: 1, scaleY: 1 } : { opacity: 0, scaleY: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 + i * 0.06, ease: [0.22, 1, 0.36, 1] }}
         />
       ))}
     </div>
   )
 }
 
-function GraphDisplay({ type, value, inView }: { type: FactRow['graphType']; value: number; inView: boolean }) {
+function ChartDisplay({ type, value, inView }: { type: HealthStat['graphType']; value: number; inView: boolean }) {
   switch (type) {
     case 'ring':
-      return <RingGraph value={value} inView={inView} />
+      return <RingChart value={value} inView={inView} />
     case 'bars':
-      return <BarsGraph value={value} inView={inView} />
+      return <BarsChart value={value} inView={inView} />
     case 'arc':
-      return <ArcGraph value={value} inView={inView} />
+      return <ArcChart value={value} inView={inView} />
     case 'blocks':
-      return <BlocksGraph value={value} inView={inView} />
+      return <BlocksChart value={value} inView={inView} />
   }
 }
 
-function FactRow({ fact, index }: { fact: FactRow; index: number }) {
+function StatRow({ stat, index }: { stat: HealthStat; index: number }) {
   const ref = useRef<HTMLDivElement>(null)
   const isInView = useInView(ref, { once: true, margin: '-100px' })
+  const isEven = index % 2 === 0
 
   return (
     <div
       ref={ref}
-      className="border-b border-foreground/10 last:border-b-0 py-16 md:py-20"
+      className="border-b border-foreground/10 last:border-b-0 py-24"
     >
-      <motion.div
-        className="flex flex-col md:flex-row md:items-center gap-8 md:gap-12"
-        initial={{ opacity: 0, y: 40 }}
-        animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
-        transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <div className="shrink-0">
-          <GraphDisplay type={fact.graphType} value={fact.statValue} inView={isInView} />
-        </div>
-
-        <div className="flex-1">
-          <span className="font-sans text-xs tracking-[0.25em] uppercase text-muted-foreground/50 block mb-4">
+      <div className={`flex flex-col md:flex-row ${!isEven ? 'md:flex-row-reverse' : ''} gap-8 md:gap-16`}>
+        <motion.div
+          className="flex-1 flex flex-col justify-center"
+          initial={{ opacity: 0, y: 40 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
+          transition={{ duration: 0.8, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <span className="font-sans text-xs tracking-[0.25em] uppercase opacity-30 block mb-6">
             {String(index + 1).padStart(2, '0')}
           </span>
           
-          <div className="flex items-baseline gap-4 mb-4">
-            <span className="font-serif text-5xl md:text-6xl lg:text-7xl tracking-[-0.03em] text-foreground leading-none">
-              {fact.stat}
-            </span>
-          </div>
+          <h3 className="font-serif text-7xl md:text-8xl tracking-[-0.03em] text-foreground leading-none mb-6">
+            {stat.percentage}
+          </h3>
 
-          <p className="font-sans text-sm md:text-base leading-relaxed text-muted-foreground max-w-lg">
-            {fact.description}
+          <p className="font-sans text-base leading-relaxed opacity-70 max-w-lg" style={{ color: ESPRESSO }}>
+            {stat.description}
           </p>
-        </div>
-      </motion.div>
+        </motion.div>
+
+        <motion.div
+          className="flex-1 flex items-center justify-center"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={isInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
+          transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <ChartDisplay type={stat.graphType} value={stat.value} inView={isInView} />
+        </motion.div>
+      </div>
     </div>
   )
 }
@@ -214,7 +227,7 @@ export function HealthFacts() {
     <section className="px-6 md:px-12 lg:px-20 xl:px-32 py-20 md:py-28">
       <motion.div
         ref={headerRef}
-        className="border-b border-foreground pb-6 mb-0 flex flex-col md:flex-row md:items-end justify-between gap-4"
+        className="border-b border-foreground pb-6 mb-0"
         initial={{ opacity: 0, y: 30 }}
         animate={headerInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
         transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
@@ -222,14 +235,11 @@ export function HealthFacts() {
         <h2 className="font-serif text-4xl md:text-6xl lg:text-7xl tracking-[-0.02em] text-foreground">
           The State of American Health
         </h2>
-        <span className="font-sans text-xs tracking-[0.25em] uppercase text-muted-foreground/50 shrink-0 pb-2">
-          Why it matters
-        </span>
       </motion.div>
 
       <div>
-        {healthFacts.map((fact, index) => (
-          <FactRow key={index} fact={fact} index={index} />
+        {healthStats.map((stat, index) => (
+          <StatRow key={index} stat={stat} index={index} />
         ))}
       </div>
     </section>
