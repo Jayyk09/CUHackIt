@@ -8,16 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Jayyk09/CUHackIt/config"
 	"github.com/Jayyk09/CUHackIt/internal/database"
 	"github.com/Jayyk09/CUHackIt/pkg/logger"
 	"github.com/Jayyk09/CUHackIt/services/gemini"
 )
 
-type foodHandler struct {
+// Handler handles HTTP requests for food products
+type Handler struct {
 	db  *database.DB
 	log *logger.Logger
-	cfg *config.Config
 	ai  *gemini.Client
 }
 
@@ -26,18 +25,38 @@ const (
 	maxLimit     = 100
 )
 
-func (h *foodHandler) List(w http.ResponseWriter, r *http.Request) {
+// NewHandler creates a new food handler
+func NewHandler(db *database.DB, ai *gemini.Client, log *logger.Logger) *Handler {
+	return &Handler{db: db, ai: ai, log: log}
+}
+
+// writeJSON writes a JSON response
+func (h *Handler) writeJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		h.log.Error("Failed to encode response: %v", err)
+	}
+}
+
+// writeError writes an error response
+func (h *Handler) writeError(w http.ResponseWriter, status int, message string) {
+	h.writeJSON(w, status, map[string]string{"error": message})
+}
+
+// List handles GET /food/search?q=...&limit=...&offset=...
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	limit, offset, err := parsePagination(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	search := strings.TrimSpace(r.URL.Query().Get("q"))
 	products, err := fetchProducts(r.Context(), h.db, search, limit, offset)
 	if err != nil {
-		h.log.Error(err)
-		http.Error(w, "failed to fetch products", http.StatusInternalServerError)
+		h.log.Error("Failed to fetch products: %v", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to fetch products")
 		return
 	}
 
@@ -49,12 +68,84 @@ func (h *foodHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(products); err != nil {
-		h.log.Error(err)
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	h.writeJSON(w, http.StatusOK, products)
+}
+
+// GetProduct handles GET /food/{id}
+func (h *Handler) GetProduct(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		h.writeError(w, http.StatusBadRequest, "product id is required")
 		return
 	}
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid product id")
+		return
+	}
+
+	rows, err := h.db.Pool.Query(r.Context(),
+		`SELECT id, product_name, norm_environmental_score, nutriscore_score,
+		 labels_en, allergens_en, traces_en, image_url, image_small_url, shelf_life, category
+		 FROM foods WHERE id = $1`, id)
+	if err != nil {
+		h.log.Error("Failed to get product: %v", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to get product")
+		return
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		h.writeError(w, http.StatusNotFound, "product not found")
+		return
+	}
+
+	var product Product
+	if err := rows.Scan(
+		&product.ID, &product.ProductName, &product.NormEnvironmentalScore,
+		&product.NutriscoreScore, &product.LabelsEn, &product.AllergensEn,
+		&product.TracesEn, &product.ImageURL, &product.ImageSmallURL,
+		&product.ShelfLife, &product.Category,
+	); err != nil {
+		h.log.Error("Failed to scan product: %v", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to get product")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, product)
+}
+
+// UpdateMetadata handles PATCH /food/{id}/metadata
+func (h *Handler) UpdateMetadata(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		h.writeError(w, http.StatusBadRequest, "product id is required")
+		return
+	}
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid product id")
+		return
+	}
+
+	var body struct {
+		Category  *string `json:"category"`
+		ShelfLife *int    `json:"shelf_life"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := updateProductMetadata(r.Context(), h.db, id, body.Category, body.ShelfLife); err != nil {
+		h.log.Error("Failed to update product metadata: %v", err)
+		h.writeError(w, http.StatusInternalServerError, "failed to update product")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func parsePagination(r *http.Request) (int, int, error) {
@@ -67,7 +158,6 @@ func parsePagination(r *http.Request) (int, int, error) {
 		}
 		limit = parsed
 	}
-
 	if limit < 0 {
 		limit = 0
 	}
@@ -96,71 +186,30 @@ func needsEnrichment(product Product) bool {
 	return categoryMissing || shelfLifeMissing
 }
 
-type geminiFoodItem struct {
-	FoodName string `json:"food_name"`
-}
-
-type geminiCategorization struct {
-	FoodName  string `json:"food_name"`
-	Category  string `json:"category"`
-	ShelfLife int    `json:"shelf_life"`
-}
-
-func (h *foodHandler) enrichProduct(ctx context.Context, product *Product) {
+func (h *Handler) enrichProduct(ctx context.Context, product *Product) {
 	if product == nil || product.ProductName == "" {
 		return
 	}
 
-	requestPayload, err := json.Marshal([]geminiFoodItem{{FoodName: product.ProductName}})
+	categories, err := h.ai.CategorizeFood(ctx, []string{product.ProductName})
 	if err != nil {
-		h.log.Warn("failed to build gemini payload: %v", err)
+		h.log.Error("gemini categorize failed: %v", err)
 		return
 	}
 
-	response, err := h.ai.Categorize(ctx, string(requestPayload))
-	if err != nil {
-		h.log.Warn("gemini categorize failed: %v", err)
+	category, ok := categories[product.ProductName]
+	if !ok || strings.TrimSpace(category) == "" {
 		return
 	}
 
-	cleaned := cleanGeminiResponse(response)
-	var categorized []geminiCategorization
-	if err := json.Unmarshal([]byte(cleaned), &categorized); err != nil {
-		h.log.Warn("failed to parse gemini response: %v", err)
-		return
-	}
+	category = strings.TrimSpace(category)
+	product.Category = &category
 
-	if len(categorized) == 0 {
-		return
-	}
-
-	category := strings.TrimSpace(categorized[0].Category)
-	if category != "" {
-		product.Category = &category
-	}
-
-	if categorized[0].ShelfLife > 0 {
-		shelfLife := categorized[0].ShelfLife
-		product.ShelfLife = &shelfLife
-	}
-
-	if product.Category == nil && product.ShelfLife == nil {
-		return
-	}
-
-	go func(id int64, category *string, shelfLife *int) {
+	go func(id int64, category *string) {
 		updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := updateProductMetadata(updateCtx, h.db, id, category, shelfLife); err != nil {
-			h.log.Warn("failed to update product metadata: %v", err)
+		if err := updateProductMetadata(updateCtx, h.db, id, category, nil); err != nil {
+			h.log.Error("failed to update product metadata: %v", err)
 		}
-	}(product.ID, product.Category, product.ShelfLife)
-}
-
-func cleanGeminiResponse(response string) string {
-	cleaned := strings.TrimSpace(response)
-	cleaned = strings.TrimPrefix(cleaned, "```json")
-	cleaned = strings.TrimPrefix(cleaned, "```")
-	cleaned = strings.TrimSuffix(cleaned, "```")
-	return strings.TrimSpace(cleaned)
+	}(product.ID, product.Category)
 }

@@ -33,8 +33,8 @@ type (
 		SessionSecret string `env:"SESSION_SECRET,required"`
 	}
 	Gemini struct {
-		APIKey string `env:"GEMINI_API_KEY,required"`
-		Model  string `env:"GEMINI_MODEL"`
+		APIKey string `env:"GEMINI_API_KEY"`
+		Model  string `env:"GEMINI_MODEL" envDefault:"gemini-1.5-flash"`
 	}
 	App struct {
 		FrontendURL string `env:"FRONTEND_URL" envDefault:"http://localhost:3000"`

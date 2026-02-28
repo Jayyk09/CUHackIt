@@ -6,98 +6,300 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-
-	"github.com/Jayyk09/CUHackIt/internal/database"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// User represents a row in the users table.
+var (
+	ErrUserNotFound      = errors.New("user not found")
+	ErrUserAlreadyExists = errors.New("user already exists")
+	ErrInvalidInput      = errors.New("invalid input")
+)
+
+// User represents a user in the system with profile information
 type User struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	Labels    []string  `json:"labels"`
-	Allergens []string  `json:"allergens"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                   string    `json:"id"`
+	Auth0ID              string    `json:"auth0_id"`
+	Email                string    `json:"email"`
+	Name                 string    `json:"name,omitempty"`
+	Allergens            []string  `json:"allergens"`
+	DietaryPreferences   []string  `json:"dietary_preferences"`
+	NutritionalGoals     []string  `json:"nutritional_goals"`
+	CookingSkill         string    `json:"cooking_skill"`
+	CuisinePreferences   []string  `json:"cuisine_preferences"`
+	OnboardingCompleted  bool      `json:"onboarding_completed"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
-// CreateUser inserts a new user. Labels and allergens default to empty.
-func CreateUser(ctx context.Context, db *database.DB, id, email, name string) (*User, error) {
-	u := &User{
-		ID:        id,
-		Email:     email,
-		Name:      name,
-		Labels:    []string{},
-		Allergens: []string{},
+// CreateUserInput is the input for creating a new user
+type CreateUserInput struct {
+	Auth0ID string `json:"auth0_id"`
+	Email   string `json:"email"`
+	Name    string `json:"name,omitempty"`
+}
+
+// UpdateProfileInput is the input for updating user profile (onboarding)
+type UpdateProfileInput struct {
+	Name               *string  `json:"name,omitempty"`
+	Allergens          []string `json:"allergens,omitempty"`
+	DietaryPreferences []string `json:"dietary_preferences,omitempty"`
+	NutritionalGoals   []string `json:"nutritional_goals,omitempty"`
+	CookingSkill       *string  `json:"cooking_skill,omitempty"`
+	CuisinePreferences []string `json:"cuisine_preferences,omitempty"`
+}
+
+// Repository handles database operations for users
+type Repository struct {
+	pool *pgxpool.Pool
+}
+
+// NewRepository creates a new user repository
+func NewRepository(pool *pgxpool.Pool) *Repository {
+	return &Repository{pool: pool}
+}
+
+// Create creates a new user
+func (r *Repository) Create(ctx context.Context, input CreateUserInput) (*User, error) {
+	if input.Auth0ID == "" || input.Email == "" {
+		return nil, ErrInvalidInput
 	}
 
-	err := db.Pool.QueryRow(ctx,
-		`INSERT INTO users (id, email, name)
-		 VALUES ($1, $2, $3)
-		 ON CONFLICT (id) DO NOTHING
-		 RETURNING created_at, updated_at`,
-		u.ID, u.Email, u.Name,
-	).Scan(&u.CreatedAt, &u.UpdatedAt)
+	var user User
+	err := r.pool.QueryRow(ctx, `
+		INSERT INTO users (auth0_id, email, name)
+		VALUES ($1, $2, $3)
+		RETURNING id, auth0_id, email, name, allergens, dietary_preferences, 
+		          nutritional_goals, cooking_skill, cuisine_preferences, 
+		          onboarding_completed, created_at, updated_at
+	`, input.Auth0ID, input.Email, input.Name).Scan(
+		&user.ID,
+		&user.Auth0ID,
+		&user.Email,
+		&user.Name,
+		&user.Allergens,
+		&user.DietaryPreferences,
+		&user.NutritionalGoals,
+		&user.CookingSkill,
+		&user.CuisinePreferences,
+		&user.OnboardingCompleted,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
 	if err != nil {
-		// ON CONFLICT DO NOTHING returns no rows for duplicates — treat as existing user.
-		if errors.Is(err, pgx.ErrNoRows) {
-			return GetUser(ctx, db, id)
+		if err.Error() == "ERROR: duplicate key value violates unique constraint" {
+			return nil, ErrUserAlreadyExists
 		}
 		return nil, err
 	}
-	return u, nil
+
+	return &user, nil
 }
 
-// GetUser retrieves a user by ID (Auth0 sub).
-func GetUser(ctx context.Context, db *database.DB, id string) (*User, error) {
-	u := &User{}
-	err := db.Pool.QueryRow(ctx,
-		`SELECT id, email, name, labels, allergens, created_at, updated_at
-		 FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.Email, &u.Name, &u.Labels, &u.Allergens, &u.CreatedAt, &u.UpdatedAt)
+// GetByID retrieves a user by their ID
+func (r *Repository) GetByID(ctx context.Context, id string) (*User, error) {
+	var user User
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, auth0_id, email, name, allergens, dietary_preferences,
+		       nutritional_goals, cooking_skill, cuisine_preferences,
+		       onboarding_completed, created_at, updated_at
+		FROM users
+		WHERE id = $1
+	`, id).Scan(
+		&user.ID,
+		&user.Auth0ID,
+		&user.Email,
+		&user.Name,
+		&user.Allergens,
+		&user.DietaryPreferences,
+		&user.NutritionalGoals,
+		&user.CookingSkill,
+		&user.CuisinePreferences,
+		&user.OnboardingCompleted,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil // not found
+			return nil, ErrUserNotFound
 		}
 		return nil, err
 	}
-	return u, nil
+
+	return &user, nil
 }
 
-// UserExists checks whether a user row exists.
-func UserExists(ctx context.Context, db *database.DB, id string) (bool, error) {
-	var exists bool
-	err := db.Pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)`, id,
-	).Scan(&exists)
-	return exists, err
-}
-
-// UpdatePreferences sets the labels and allergens arrays.
-func UpdatePreferences(ctx context.Context, db *database.DB, id string, labels, allergens []string) (*User, error) {
-	if labels == nil {
-		labels = []string{}
-	}
-	if allergens == nil {
-		allergens = []string{}
-	}
-
-	u := &User{}
-	err := db.Pool.QueryRow(ctx,
-		`INSERT INTO users (id, labels, allergens)
-		 VALUES ($1, $2, $3)
-		 ON CONFLICT (id) DO UPDATE
-		   SET labels = EXCLUDED.labels,
-		       allergens = EXCLUDED.allergens,
-		       updated_at = now()
-		 RETURNING id, email, name, labels, allergens, created_at, updated_at`,
-		id, labels, allergens,
-	).Scan(&u.ID, &u.Email, &u.Name, &u.Labels, &u.Allergens, &u.CreatedAt, &u.UpdatedAt)
+// GetByAuth0ID retrieves a user by their Auth0 ID
+func (r *Repository) GetByAuth0ID(ctx context.Context, auth0ID string) (*User, error) {
+	var user User
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, auth0_id, email, name, allergens, dietary_preferences,
+		       nutritional_goals, cooking_skill, cuisine_preferences,
+		       onboarding_completed, created_at, updated_at
+		FROM users
+		WHERE auth0_id = $1
+	`, auth0ID).Scan(
+		&user.ID,
+		&user.Auth0ID,
+		&user.Email,
+		&user.Name,
+		&user.Allergens,
+		&user.DietaryPreferences,
+		&user.NutritionalGoals,
+		&user.CookingSkill,
+		&user.CuisinePreferences,
+		&user.OnboardingCompleted,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
+			return nil, ErrUserNotFound
 		}
 		return nil, err
 	}
-	return u, nil
+
+	return &user, nil
+}
+
+// GetByEmail retrieves a user by their email
+func (r *Repository) GetByEmail(ctx context.Context, email string) (*User, error) {
+	var user User
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, auth0_id, email, name, allergens, dietary_preferences,
+		       nutritional_goals, cooking_skill, cuisine_preferences,
+		       onboarding_completed, created_at, updated_at
+		FROM users
+		WHERE email = $1
+	`, email).Scan(
+		&user.ID,
+		&user.Auth0ID,
+		&user.Email,
+		&user.Name,
+		&user.Allergens,
+		&user.DietaryPreferences,
+		&user.NutritionalGoals,
+		&user.CookingSkill,
+		&user.CuisinePreferences,
+		&user.OnboardingCompleted,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+// UpdateProfile updates a user's profile information
+func (r *Repository) UpdateProfile(ctx context.Context, id string, input UpdateProfileInput) (*User, error) {
+	var user User
+	err := r.pool.QueryRow(ctx, `
+		UPDATE users
+		SET 
+			name = COALESCE($2, name),
+			allergens = COALESCE($3, allergens),
+			dietary_preferences = COALESCE($4, dietary_preferences),
+			nutritional_goals = COALESCE($5, nutritional_goals),
+			cooking_skill = COALESCE($6, cooking_skill),
+			cuisine_preferences = COALESCE($7, cuisine_preferences)
+		WHERE id = $1
+		RETURNING id, auth0_id, email, name, allergens, dietary_preferences,
+		          nutritional_goals, cooking_skill, cuisine_preferences,
+		          onboarding_completed, created_at, updated_at
+	`, id, input.Name, input.Allergens, input.DietaryPreferences,
+		input.NutritionalGoals, input.CookingSkill, input.CuisinePreferences).Scan(
+		&user.ID,
+		&user.Auth0ID,
+		&user.Email,
+		&user.Name,
+		&user.Allergens,
+		&user.DietaryPreferences,
+		&user.NutritionalGoals,
+		&user.CookingSkill,
+		&user.CuisinePreferences,
+		&user.OnboardingCompleted,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+// CompleteOnboarding marks a user's onboarding as complete
+func (r *Repository) CompleteOnboarding(ctx context.Context, id string, input UpdateProfileInput) (*User, error) {
+	var user User
+	err := r.pool.QueryRow(ctx, `
+		UPDATE users
+		SET 
+			name = COALESCE($2, name),
+			allergens = COALESCE($3, allergens),
+			dietary_preferences = COALESCE($4, dietary_preferences),
+			nutritional_goals = COALESCE($5, nutritional_goals),
+			cooking_skill = COALESCE($6, cooking_skill),
+			cuisine_preferences = COALESCE($7, cuisine_preferences),
+			onboarding_completed = TRUE
+		WHERE id = $1
+		RETURNING id, auth0_id, email, name, allergens, dietary_preferences,
+		          nutritional_goals, cooking_skill, cuisine_preferences,
+		          onboarding_completed, created_at, updated_at
+	`, id, input.Name, input.Allergens, input.DietaryPreferences,
+		input.NutritionalGoals, input.CookingSkill, input.CuisinePreferences).Scan(
+		&user.ID,
+		&user.Auth0ID,
+		&user.Email,
+		&user.Name,
+		&user.Allergens,
+		&user.DietaryPreferences,
+		&user.NutritionalGoals,
+		&user.CookingSkill,
+		&user.CuisinePreferences,
+		&user.OnboardingCompleted,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+// Delete removes a user from the database
+func (r *Repository) Delete(ctx context.Context, id string) error {
+	result, err := r.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+// FindOrCreate finds a user by Auth0 ID or creates a new one
+func (r *Repository) FindOrCreate(ctx context.Context, input CreateUserInput) (*User, error) {
+	// Try to find existing user
+	user, err := r.GetByAuth0ID(ctx, input.Auth0ID)
+	if err == nil {
+		return user, nil
+	}
+	if !errors.Is(err, ErrUserNotFound) {
+		return nil, err
+	}
+
+	// Create new user
+	return r.Create(ctx, input)
 }

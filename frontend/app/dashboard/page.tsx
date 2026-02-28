@@ -64,9 +64,6 @@ function FoodGridItem({
         <p className="font-sans font-bold text-sm text-espresso truncate">
           {item.product_name}
         </p>
-        <p className="font-sans text-xs text-espresso/50 mt-1">
-          {item.quantity} {item.units}
-        </p>
       </div>
     </button>
   )
@@ -247,12 +244,6 @@ function DetailModal({
                   </p>
                 </div>
                 <div>
-                  <p className="font-sans text-xs uppercase tracking-[0.2em] text-espresso/50 mb-1">
-                    Quantity
-                  </p>
-                  <p className="font-sans text-sm text-espresso">
-                    {item.quantity} {item.units}
-                  </p>
                 </div>
                 <div>
                   <p className="font-sans text-xs uppercase tracking-[0.2em] text-espresso/50 mb-1">

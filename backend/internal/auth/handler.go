@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 
@@ -98,9 +99,14 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	// Check if this is a new user.
 	isNew := false
 	if sub != "" {
-		existed, err := users.UserExists(r.Context(), h.db, sub)
-		if err == nil && !existed {
-			_, _ = users.CreateUser(r.Context(), h.db, sub, email, name)
+		repo := users.NewRepository(h.db.Pool)
+		_, err := repo.GetByAuth0ID(r.Context(), sub)
+		if errors.Is(err, users.ErrUserNotFound) {
+			_, _ = repo.Create(r.Context(), users.CreateUserInput{
+				Auth0ID: sub,
+				Email:   email,
+				Name:    name,
+			})
 			isNew = true
 		}
 	}
