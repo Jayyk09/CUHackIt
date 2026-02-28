@@ -7,6 +7,7 @@ import (
 	"github.com/Jayyk09/CUHackIt/cmd/server"
 	"github.com/Jayyk09/CUHackIt/config"
 	"github.com/Jayyk09/CUHackIt/internal/database"
+	"github.com/Jayyk09/CUHackIt/internal/middleware"
 	"github.com/Jayyk09/CUHackIt/internal/routes"
 	"github.com/Jayyk09/CUHackIt/pkg/logger"
 )
@@ -25,6 +26,12 @@ func Run(cfg *config.Config) {
 
 	l.Info("Connected to database")
 
+	// Run auto-migrations (creates tables if they don't exist).
+	if err := db.Migrate(context.Background()); err != nil {
+		l.Fatal("Migration error: %v", err)
+	}
+	l.Info("Database migrations applied")
+
 	// Create basic router
 	r := http.NewServeMux()
 
@@ -32,7 +39,7 @@ func Run(cfg *config.Config) {
 		l.Fatal("Failed to setup routes: %v", err)
 	}
 
-	if err := server.Start(cfg, r, l); err != nil {
+	if err := server.Start(cfg, middleware.CORS(cfg, r), l); err != nil {
 		l.Fatal("Server error: %v", err)
 	}
 }

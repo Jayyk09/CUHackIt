@@ -10,6 +10,8 @@ import (
 	"github.com/gorilla/sessions"
 
 	"github.com/Jayyk09/CUHackIt/config"
+	"github.com/Jayyk09/CUHackIt/internal/database"
+	"github.com/Jayyk09/CUHackIt/internal/users"
 )
 
 // Handler holds the authenticator and session store used by auth routes.
@@ -17,10 +19,11 @@ type Handler struct {
 	auth  *Authenticator
 	store sessions.Store
 	cfg   *config.Config
+	db    *database.DB
 }
 
-func newHandler(auth *Authenticator, store sessions.Store, cfg *config.Config) *Handler {
-	return &Handler{auth: auth, store: store, cfg: cfg}
+func newHandler(auth *Authenticator, store sessions.Store, cfg *config.Config, db *database.DB) *Handler {
+	return &Handler{auth: auth, store: store, cfg: cfg, db: db}
 }
 
 // Login initiates the Auth0 authorization code flow.
@@ -84,7 +87,31 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/user", http.StatusTemporaryRedirect)
+	// Extract the Auth0 sub (user ID), email and name from the profile.
+	sub, _ := profile["sub"].(string)
+	email, _ := profile["email"].(string)
+	name, _ := profile["name"].(string)
+	if name == "" {
+		name, _ = profile["nickname"].(string)
+	}
+
+	// Check if this is a new user.
+	isNew := false
+	if sub != "" {
+		existed, err := users.UserExists(r.Context(), h.db, sub)
+		if err == nil && !existed {
+			_, _ = users.CreateUser(r.Context(), h.db, sub, email, name)
+			isNew = true
+		}
+	}
+
+	// Redirect to the frontend — new users go to /onboarding with their user ID.
+	frontendURL := h.cfg.App.FrontendURL
+	if isNew {
+		http.Redirect(w, r, frontendURL+"/onboarding?uid="+url.QueryEscape(sub), http.StatusTemporaryRedirect)
+	} else {
+		http.Redirect(w, r, frontendURL, http.StatusTemporaryRedirect)
+	}
 }
 
 // Logout clears the session and redirects to Auth0's logout endpoint.
@@ -95,12 +122,8 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-
-	returnTo, err := url.Parse(scheme + "://" + r.Host)
+	// Redirect back to the frontend after Auth0 logout.
+	returnTo, err := url.Parse(h.cfg.App.FrontendURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

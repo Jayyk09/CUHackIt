@@ -31,6 +31,18 @@ export function SiteHeader() {
         <span className="font-sans text-[10px] tracking-[0.2em] uppercase text-muted-foreground">
           Est. 2026
         </span>
+        <a
+          href={`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'}/login`}
+          className="font-sans text-[10px] tracking-[0.25em] uppercase text-muted-foreground hover:text-foreground transition-colors duration-300"
+        >
+          Sign In
+        </a>
+        <a
+          href={`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'}/logout`}
+          className="font-sans text-[10px] tracking-[0.25em] uppercase text-muted-foreground hover:text-foreground transition-colors duration-300"
+        >
+          Sign Out
+        </a>
       </div>
     </motion.header>
   )
