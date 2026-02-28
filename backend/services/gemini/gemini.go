@@ -55,29 +55,29 @@ type Ingredient struct {
 
 // UnmarshalJSON handles Amount being either a JSON string or number.
 func (ing *Ingredient) UnmarshalJSON(data []byte) error {
-	// Use an alias to avoid infinite recursion.
-	type Alias Ingredient
-	aux := &struct {
-		Amount json.RawMessage `json:"amount"`
-		*Alias
-	}{
-		Alias: (*Alias)(ing),
-	}
-	if err := json.Unmarshal(data, aux); err != nil {
+	// Parse into a raw map to avoid any struct field type conflicts.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	if len(aux.Amount) > 0 {
-		// Try string first
+	if v, ok := raw["name"]; ok {
+		_ = json.Unmarshal(v, &ing.Name)
+	}
+	if v, ok := raw["unit"]; ok {
+		_ = json.Unmarshal(v, &ing.Unit)
+	}
+	if v, ok := raw["from_pantry"]; ok {
+		_ = json.Unmarshal(v, &ing.FromPantry)
+	}
+	if v, ok := raw["amount"]; ok {
+		// Try string first, fall back to number
 		var s string
-		if err := json.Unmarshal(aux.Amount, &s); err == nil {
+		if err := json.Unmarshal(v, &s); err == nil {
 			ing.Amount = s
 		} else {
-			// Fall back to number → string
 			var n json.Number
-			if err := json.Unmarshal(aux.Amount, &n); err == nil {
+			if err := json.Unmarshal(v, &n); err == nil {
 				ing.Amount = n.String()
-			} else {
-				ing.Amount = string(aux.Amount)
 			}
 		}
 	}

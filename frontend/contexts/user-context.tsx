@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { getUserByAuth0ID, getUserByID, type User } from '@/lib/user-api'
+import { getUserByID, getUserByAuth0ID, type User } from '@/lib/user-api'
 
 const STORAGE_KEY = 'sift_user'
 
@@ -77,11 +77,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
 
       // 2. Check URL for ?uid= (passed by backend after OAuth callback)
-      //    The backend now passes the internal DB UUID.
+      //    The backend passes the Auth0 sub, so resolve via auth0 lookup.
       const uid = searchParams.get('uid')
       if (uid) {
         try {
-          const resolved = await getUserByID(uid)
+          const resolved = await getUserByAuth0ID(uid)
           setUser(resolved)
           localStorage.setItem(STORAGE_KEY, JSON.stringify(resolved))
 

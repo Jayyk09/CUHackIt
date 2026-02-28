@@ -13,6 +13,7 @@ import {
   type OnboardingStep,
 } from '@/components/onboarding';
 import { getUserByAuth0ID } from '@/lib/user-api';
+import { useUser } from '@/contexts/user-context';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -41,6 +42,7 @@ function OnboardingContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const uid = searchParams.get('uid');
+  const { user: contextUser } = useUser();
 
   const [currentStep, setCurrentStep] = useState(0);
   const [direction, setDirection] = useState(0);
@@ -52,6 +54,12 @@ function OnboardingContent() {
   const [internalUserId, setInternalUserId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Prefer the user already in context (redirected from UserProvider)
+    if (contextUser?.id) {
+      setInternalUserId(contextUser.id);
+      return;
+    }
+    // Fall back to ?uid= auth0 sub param (fresh OAuth flow)
     if (!uid) return;
     getUserByAuth0ID(uid)
       .then((user) => {
@@ -67,7 +75,7 @@ function OnboardingContent() {
         console.error('Failed to resolve user:', err);
         setError('Could not identify your account. Please try logging in again.');
       });
-  }, [uid]);
+  }, [uid, contextUser?.id]);
 
   const step = ONBOARDING_STEPS[currentStep];
   const isFirstStep = currentStep === 0;
@@ -115,6 +123,16 @@ function OnboardingContent() {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || `Failed to save preferences (${response.status})`);
+      }
+
+      // Update localStorage with the fresh user from the backend (onboarding_completed: true)
+      try {
+        const updatedUser = await response.json();
+        if (updatedUser?.id) {
+          localStorage.setItem('sift_user', JSON.stringify(updatedUser));
+        }
+      } catch {
+        // ignore if response has no body
       }
 
       // Success - redirect to dashboard
