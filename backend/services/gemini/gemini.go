@@ -11,7 +11,6 @@ import (
 type Client struct {
 	client *genai.Client
 	model  string
-	models []string
 }
 
 // New creates a new Gemini client using the provided API key and model.
@@ -24,14 +23,12 @@ func New(ctx context.Context, apiKey string, model string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gemini client: %w", err)
 	}
-	models, err := discoverModels(ctx, client, model)
-	if model == "" && len(models) > 0 {
-		model = models[0]
+	if model == "" {
+		return nil, fmt.Errorf("gemini model is required")
 	}
 	return &Client{
 		client: client,
 		model:  model,
-		models: models,
 	}, nil
 }
 
@@ -44,7 +41,7 @@ func (c *Client) Categorize(ctx context.Context, foodItemsJSON string) (string, 
 		{Parts: []*genai.Part{{Text: prompt}}},
 	}
 
-	resp, err := c.generateContentWithFallback(ctx, contents)
+	resp, err := c.client.Models.GenerateContent(ctx, c.model, contents, nil)
 	if err != nil {
 		return "", fmt.Errorf("gemini categorize error: %w", err)
 	}
@@ -61,7 +58,7 @@ func (c *Client) Recommend(ctx context.Context, pantryJSON string) (string, erro
 		{Parts: []*genai.Part{{Text: prompt}}},
 	}
 
-	resp, err := c.generateContentWithFallback(ctx, contents)
+	resp, err := c.client.Models.GenerateContent(ctx, c.model, contents, nil)
 	if err != nil {
 		return "", fmt.Errorf("gemini recommend error: %w", err)
 	}
@@ -85,55 +82,4 @@ func extractText(resp *genai.GenerateContentResponse) string {
 		}
 	}
 	return result
-}
-
-func (c *Client) generateContentWithFallback(ctx context.Context, contents []*genai.Content) (*genai.GenerateContentResponse, error) {
-	var lastErr error
-	for _, model := range c.models {
-		resp, err := c.client.Models.GenerateContent(ctx, model, contents, nil)
-		if err == nil {
-			c.model = model
-			return resp, nil
-		}
-		lastErr = err
-	}
-	return nil, lastErr
-}
-
-func discoverModels(ctx context.Context, client *genai.Client, preferred string) ([]string, error) {
-	models := make([]string, 0)
-	for item, err := range client.Models.All(ctx) {
-		if err != nil {
-			return nil, err
-		}
-		if item == nil || item.Name == "" {
-			continue
-		}
-		if !supportsGenerateContent(item.SupportedActions) {
-			continue
-		}
-		models = append(models, item.Name)
-	}
-	if len(models) == 0 {
-		return nil, fmt.Errorf("no gemini models available")
-	}
-	if preferred == "" {
-		return models, nil
-	}
-	ordered := []string{preferred}
-	for _, name := range models {
-		if name != preferred {
-			ordered = append(ordered, name)
-		}
-	}
-	return ordered, nil
-}
-
-func supportsGenerateContent(actions []string) bool {
-	for _, action := range actions {
-		if action == "generateContent" {
-			return true
-		}
-	}
-	return false
 }
