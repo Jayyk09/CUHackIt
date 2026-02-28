@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Jayyk09/CUHackIt/internal/agents"
@@ -120,15 +121,16 @@ func (h *Handler) GenerateRecipes(w http.ResponseWriter, r *http.Request) {
 	// Convert pantry items to agent format
 	agentPantryItems := make([]agents.PantryItem, len(pantryItems))
 	for i, item := range pantryItems {
+		category := ""
+		if item.Category != nil {
+			category = *item.Category
+		}
 		agentPantryItems[i] = agents.PantryItem{
-			ID:             item.ID.String(),
-			Name:           item.Name,
-			Category:       string(item.Category),
-			Quantity:       item.Quantity,
-			Unit:           item.Unit,
-			ExpirationDate: item.ExpirationDate,
-			IsExpiringSoon: item.IsExpiringSoon,
-			IsExpired:      item.IsExpired,
+			ID:       strconv.Itoa(item.ID),
+			Name:     item.ProductName,
+			Category: category,
+			Quantity: float64(item.Quantity),
+			Unit:     "item",
 		}
 	}
 

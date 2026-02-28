@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
@@ -13,6 +13,7 @@ import { RecipeCard } from '@/components/recipe-card'
 import { RecipeDetail } from '@/components/recipe-detail'
 import { useUser } from '@/contexts/user-context'
 import { SearchList } from '@/components/search-list'
+import { listPantryItems, type PantryItem } from '@/lib/pantry-api'
 
 // ─── Food search components ───────────────────────────────────────────────────
 
@@ -376,7 +377,8 @@ export default function DashboardPage() {
   const [searchMode, setSearchMode] = useState<SearchMode>('food')
 
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null)
-  const [pantryItems, setPantryItems] = useState<FoodItem[]>([])
+  const [pantryItems, setPantryItems] = useState<PantryItem[]>([])
+  const [isPantryLoading, setIsPantryLoading] = useState(true)
 
   const [recipeResult, setRecipeResult] = useState<GenerateResult | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -384,7 +386,39 @@ export default function DashboardPage() {
 
   const { results: searchResults, isLoading, isSearching } = useDebouncedSearch(searchQuery)
 
-  const displayItems = isSearching ? searchResults : pantryItems
+  // Fetch pantry items from backend
+  useEffect(() => {
+    if (!user) return
+    setIsPantryLoading(true)
+    listPantryItems(user.id)
+      .then(setPantryItems)
+      .catch((err) => {
+        console.error('Failed to load pantry:', err)
+        toast.error('Could not load pantry items')
+      })
+      .finally(() => setIsPantryLoading(false))
+  }, [user])
+
+  // Convert PantryItem → FoodItem for display in FoodGrid
+  const pantryAsFoodItems: FoodItem[] = useMemo(
+    () =>
+      pantryItems.map((p) => ({
+        id: p.food_id,
+        product_name: p.product_name,
+        category: p.category?.toLowerCase() ?? 'specialty',
+        environmental_score: Math.round(p.norm_environmental_score ?? 0),
+        nutriscore_score: Math.round(p.nutriscore_score ?? 0),
+        labels_en: p.labels_en ?? [],
+        allergens_en: p.allergens_en ?? [],
+        traces_en: p.traces_en ?? [],
+        shelf_life: p.shelf_life ?? 0,
+        is_spoiled: false,
+        image_url: p.image_url ?? p.image_small_url ?? '/placeholder.jpg',
+      })),
+    [pantryItems]
+  )
+
+  const displayItems = isSearching ? searchResults : pantryAsFoodItems
   const isShowingSearchResults = isSearching
 
   const handleGenerate = async () => {
@@ -423,7 +457,7 @@ export default function DashboardPage() {
   }
 
   const handleAddToPantry = async (item: FoodItem, quantity: number, isFrozen: boolean) => {
-    if (pantryItems.some((p) => p.id === item.id)) {
+    if (pantryItems.some((p) => p.food_id === item.id)) {
       toast.info(`${item.product_name} is already in your pantry`)
       return
     }
@@ -440,7 +474,9 @@ export default function DashboardPage() {
         quantity,
         is_frozen: isFrozen,
       })
-      setPantryItems((prev) => [...prev, item])
+      // Re-fetch pantry to get the updated list with joined food data
+      const updated = await listPantryItems(user.id)
+      setPantryItems(updated)
       toast.success(`${item.product_name} added to pantry`)
       setSelectedFood(null)
     } catch (err) {
@@ -526,10 +562,12 @@ export default function DashboardPage() {
                 ? isLoading
                   ? 'Searching...'
                   : `${displayItems.length} ${displayItems.length === 1 ? 'result' : 'results'} for "${searchQuery}"`
-                : `${displayItems.length} ${displayItems.length === 1 ? 'item' : 'items'} in pantry`}
+                : isPantryLoading
+                  ? 'Loading pantry...'
+                  : `${displayItems.length} ${displayItems.length === 1 ? 'item' : 'items'} in pantry`}
             </p>
 
-            {displayItems.length === 0 && !isLoading ? (
+            {displayItems.length === 0 && !isLoading && !isPantryLoading ? (
               <div className="py-16 text-center">
                 <p className="font-serif text-xl text-espresso/50">
                   {isShowingSearchResults
@@ -553,7 +591,7 @@ export default function DashboardPage() {
             item={selectedFood}
             onClose={() => setSelectedFood(null)}
             onAddToPantry={handleAddToPantry}
-            isInPantry={pantryItems.some((p) => p.id === selectedFood.id)}
+            isInPantry={pantryItems.some((p) => p.food_id === selectedFood.id)}
           />
         )}
       </AnimatePresence>
