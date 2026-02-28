@@ -33,6 +33,7 @@ type (
 	}
 	Gemini struct {
 		APIKey string `env:"GEMINI_API_KEY,required"`
+		Model  string `env:"GEMINI_MODEL"`
 	}
 )
 

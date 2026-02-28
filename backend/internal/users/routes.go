@@ -3,12 +3,15 @@ package users
 import (
 	"net/http"
 
+	"github.com/gorilla/sessions"
+
 	"github.com/Jayyk09/CUHackIt/config"
+	"github.com/Jayyk09/CUHackIt/internal/auth"
 	"github.com/Jayyk09/CUHackIt/internal/database"
 	"github.com/Jayyk09/CUHackIt/pkg/logger"
 )
 
-func RegisterRoutes(r *http.ServeMux, db *database.DB) {
+func RegisterRoutes(r *http.ServeMux, db *database.DB, store sessions.Store) {
 	cfg := config.GetConfig()
 	_ = &userHandler{
 		db:  db,
@@ -17,7 +20,7 @@ func RegisterRoutes(r *http.ServeMux, db *database.DB) {
 	}
 
 	// TODO: replace stubs with real handlers
-	r.HandleFunc("GET /users/{id}", http.NotFound)
-	r.HandleFunc("POST /users", http.NotFound)
-	r.HandleFunc("PUT /users/{id}", http.NotFound)
+	r.Handle("GET /users/{id}", auth.IsAuthenticated(store, http.HandlerFunc(http.NotFound)))
+	r.Handle("POST /users", auth.IsAuthenticated(store, http.HandlerFunc(http.NotFound)))
+	r.Handle("PUT /users/{id}", auth.IsAuthenticated(store, http.HandlerFunc(http.NotFound)))
 }

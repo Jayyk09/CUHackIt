@@ -13,11 +13,12 @@ import (
 )
 
 func Setup(r *http.ServeMux, db *database.DB, cfg *config.Config) error {
-	pantry.RegisterRoutes(r, db)
-	users.RegisterRoutes(r, db)
-	food.RegisterRoutes(r, db)
+	store := auth.NewSessionStore(cfg)
+	pantry.RegisterRoutes(r, db, store)
+	users.RegisterRoutes(r, db, store)
+	food.RegisterRoutes(r, db, store)
 
-	if err := auth.RegisterRoutes(r, cfg); err != nil {
+	if err := auth.RegisterRoutes(r, cfg, store); err != nil {
 		return fmt.Errorf("auth routes: %w", err)
 	}
 
