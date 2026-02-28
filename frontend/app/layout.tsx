@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { Playfair_Display, Space_Grotesk } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { UserProvider } from '@/contexts/user-context'
 import './globals.css'
 
 const playfair = Playfair_Display({
@@ -45,7 +47,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${playfair.variable} ${spaceGrotesk.variable}`}>
       <body className="font-sans antialiased">
-        {children}
+        <Suspense>
+          <UserProvider>
+            {children}
+          </UserProvider>
+        </Suspense>
         <Analytics />
       </body>
     </html>
