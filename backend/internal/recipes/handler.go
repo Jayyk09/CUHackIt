@@ -66,7 +66,7 @@ func (h *Handler) getUserID(r *http.Request) (string, error) {
 
 // GenerateRecipesRequest is the request body for generating recipes
 type GenerateRecipesRequest struct {
-	Mode        string `json:"mode"`         // "pantry_only", "flexible", "both"
+	Mode        string `json:"mode"`         // "pantry_only" | "flexible" | "both" | "personal"
 	RecipeCount int    `json:"recipe_count"` // 1-3
 	UserPrompt  string `json:"user_prompt"`  // Optional free-text (e.g. "grilled chicken")
 }
@@ -106,14 +106,15 @@ func (h *Handler) GenerateRecipes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(pantryItems) == 0 && req.UserPrompt == "" {
+	// Personal mode works without a pantry — skip the empty-pantry guard.
+	if len(pantryItems) == 0 && req.UserPrompt == "" && req.Mode != "personal" {
 		h.writeError(w, http.StatusBadRequest, "pantry is empty - add some items first")
 		return
 	}
 
 	// If the pantry is empty but the user gave a prompt, force flexible mode
-	// so the AI can suggest all ingredients.
-	if len(pantryItems) == 0 && req.UserPrompt != "" {
+	// so the AI can suggest all ingredients (unless already personal mode).
+	if len(pantryItems) == 0 && req.UserPrompt != "" && req.Mode != "personal" {
 		req.Mode = "flexible"
 	}
 
@@ -148,6 +149,8 @@ func (h *Handler) GenerateRecipes(w http.ResponseWriter, r *http.Request) {
 		mode = agents.ModeFlexible
 	case "both":
 		mode = agents.ModeBoth
+	case "personal":
+		mode = agents.ModePersonal
 	default:
 		mode = agents.ModePantryOnly
 	}
@@ -173,8 +176,10 @@ func (h *Handler) GenerateRecipes(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, agents.ErrAllRecipesFiltered) {
 			h.writeJSON(w, http.StatusOK, map[string]interface{}{
 				"message":        "all generated recipes contained allergens and were filtered",
-				"recipes":        []interface{}{},
+				"all_recipes":    []interface{}{},
+				"total_count":    0,
 				"filtered_count": result.FilteredCount,
+				"generated_at":   result.GeneratedAt,
 			})
 			return
 		}

@@ -24,7 +24,7 @@ export interface GeneratedRecipe {
   carbs_g?: number
   fat_g?: number
   tags?: string[]
-  source: 'pantry_only' | 'flexible' | 'user_created'
+  source: 'pantry_only' | 'flexible' | 'personal' | 'user_created'
 }
 
 export interface SavedRecipe {
@@ -45,7 +45,7 @@ export interface SavedRecipe {
   protein_g?: number
   carbs_g?: number
   fat_g?: number
-  source: 'pantry_only' | 'flexible' | 'user_created'
+  source: 'pantry_only' | 'flexible' | 'personal' | 'user_created'
   ai_model?: string
   is_favorite: boolean
   times_cooked: number
@@ -60,6 +60,7 @@ export interface SavedRecipe {
 export interface GenerateResult {
   pantry_only_recipes?: GeneratedRecipe[]
   flexible_recipes?: GeneratedRecipe[]
+  personal_recipes?: GeneratedRecipe[]
   all_recipes: GeneratedRecipe[]
   generated_at: string
   total_count: number
@@ -70,7 +71,7 @@ export interface GenerateResult {
 
 export async function generateRecipes(
   userId: string,
-  mode: 'pantry_only' | 'flexible' | 'both' = 'flexible',
+  mode: 'pantry_only' | 'flexible' | 'both' | 'personal' = 'flexible',
   count = 2,
   userPrompt = ''
 ): Promise<GenerateResult> {
@@ -284,20 +285,22 @@ const MOCK_RECIPES: GeneratedRecipe[] = [
 ]
 
 function getMockRecipes(
-  mode: 'pantry_only' | 'flexible' | 'both'
+  mode: 'pantry_only' | 'flexible' | 'both' | 'personal'
 ): GenerateResult {
   const pantryOnly = MOCK_RECIPES.filter((r) => r.source === 'pantry_only')
   const flexible = MOCK_RECIPES.filter((r) => r.source === 'flexible')
 
+  const allFallback = [...pantryOnly, ...flexible]
   return {
-    pantry_only_recipes: mode !== 'flexible' ? pantryOnly : undefined,
-    flexible_recipes: mode !== 'pantry_only' ? flexible : undefined,
+    pantry_only_recipes: mode !== 'flexible' && mode !== 'personal' ? pantryOnly : undefined,
+    flexible_recipes: mode !== 'pantry_only' && mode !== 'personal' ? flexible : undefined,
+    personal_recipes: mode === 'personal' ? allFallback : undefined,
     all_recipes:
       mode === 'both'
         ? MOCK_RECIPES
         : mode === 'pantry_only'
           ? pantryOnly
-          : [...pantryOnly, ...flexible],
+          : allFallback,
     generated_at: new Date().toISOString(),
     total_count: MOCK_RECIPES.length,
     filtered_count: MOCK_RECIPES.length,
