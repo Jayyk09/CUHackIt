@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, Suspense } from 'react';
+import { useState, useCallback, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -12,6 +12,7 @@ import {
   type OnboardingPayload,
   type OnboardingStep,
 } from '@/components/onboarding';
+import { getUserByAuth0ID } from '@/lib/user-api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -47,6 +48,27 @@ function OnboardingContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Resolve auth0 sub → internal UUID
+  const [internalUserId, setInternalUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!uid) return;
+    getUserByAuth0ID(uid)
+      .then((user) => {
+        setInternalUserId(user.id);
+        // Also cache in localStorage so the user context picks it up after redirect
+        try {
+          localStorage.setItem('sift_user', JSON.stringify(user));
+        } catch {
+          // ignore
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to resolve user:', err);
+        setError('Could not identify your account. Please try logging in again.');
+      });
+  }, [uid]);
+
   const step = ONBOARDING_STEPS[currentStep];
   const isFirstStep = currentStep === 0;
   const isLastStep = currentStep === ONBOARDING_STEPS.length - 1;
@@ -62,7 +84,7 @@ function OnboardingContent() {
 
   // Submit onboarding data
   const handleSubmit = useCallback(async () => {
-    if (!uid) {
+    if (!internalUserId) {
       setError('Missing user ID. Please try logging in again.');
       return;
     }
@@ -83,7 +105,7 @@ function OnboardingContent() {
       filteredPayload.cuisine_preferences = payload.cuisine_preferences;
 
     try {
-      const response = await fetch(`${API_URL}/users/${uid}/onboarding`, {
+      const response = await fetch(`${API_URL}/users/${internalUserId}/onboarding`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -101,7 +123,7 @@ function OnboardingContent() {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
       setIsSubmitting(false);
     }
-  }, [uid, payload, router]);
+  }, [internalUserId, payload, router]);
 
   // Navigate to next step
   const handleNext = useCallback(async () => {

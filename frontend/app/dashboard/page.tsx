@@ -7,36 +7,13 @@ import { toast } from 'sonner'
 import { FoodItem } from '@/lib/food-api'
 import { getCategoryImage } from '@/lib/category-images'
 import { useDebouncedSearch } from '@/hooks/use-debounced-search'
+import { generateRecipes, saveRecipe } from '@/lib/recipes-api'
+import type { GeneratedRecipe, GenerateResult } from '@/lib/recipes-api'
+import { RecipeCard } from '@/components/recipe-card'
+import { RecipeDetail } from '@/components/recipe-detail'
+import { useUser } from '@/contexts/user-context'
 
-function SearchBar({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (value: string) => void
-}) {
-  return (
-    <div className="relative w-full border-b border-espresso pb-6">
-      <div className="flex items-center gap-4">
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="search recipe or ingredients"
-          className="w-full bg-transparent font-serif text-2xl md:text-3xl text-espresso placeholder:text-espresso/40 placeholder:font-serif focus:outline-none"
-        />
-        <Image
-          src="/leaf.png"
-          alt="Search"
-          width={28}
-          height={28}
-          unoptimized
-          className="flex-shrink-0"
-        />
-      </div>
-    </div>
-  )
-}
+// ─── Food search components ───────────────────────────────────────────────────
 
 function FoodGridItem({
   item,
@@ -76,13 +53,10 @@ function FoodGrid({
   items: FoodItem[]
   onSelect: (item: FoodItem) => void
 }) {
-  // Generate category images once on mount, stable for each item
   const categoryImages = useMemo(() => {
     const images: Record<string, string> = {}
     items.forEach((item) => {
-      if (!images[item.id]) {
-        images[item.id] = getCategoryImage(item.category)
-      }
+      if (!images[item.id]) images[item.id] = getCategoryImage(item.category)
     })
     return images
   }, [items])
@@ -101,7 +75,7 @@ function FoodGrid({
   )
 }
 
-function DetailModal({
+function FoodDetailModal({
   item,
   onClose,
   onAddToPantry,
@@ -137,7 +111,6 @@ function DetailModal({
         </button>
 
         <div className="p-8 md:p-10">
-          {/* Open Food Facts image */}
           <div className="relative aspect-video w-full mb-8 overflow-hidden bg-espresso/5">
             <Image
               src={item.image_url}
@@ -233,18 +206,17 @@ function DetailModal({
                   <p className="font-sans text-xs uppercase tracking-[0.2em] text-espresso/50 mb-1">
                     Category
                   </p>
-                  <p className="font-sans text-sm text-espresso capitalize">{item.category}</p>
+                  <p className="font-sans text-sm text-espresso capitalize">
+                    {item.category}
+                  </p>
                 </div>
                 <div>
                   <p className="font-sans text-xs uppercase tracking-[0.2em] text-espresso/50 mb-1">
                     Shelf Life
                   </p>
-                  <p className="font-sans text-sm text-espresso">
-                    {item.shelf_life} days
-                  </p>
+                  <p className="font-sans text-sm text-espresso">{item.shelf_life} days</p>
                 </div>
-                <div>
-                </div>
+                <div />
                 <div>
                   <p className="font-sans text-xs uppercase tracking-[0.2em] text-espresso/50 mb-1">
                     Status
@@ -260,7 +232,6 @@ function DetailModal({
               </div>
             </div>
 
-            {/* Add to Pantry Button */}
             {!isInPantry && (
               <div className="pt-6 border-t border-espresso/10">
                 <button
@@ -278,32 +249,146 @@ function DetailModal({
   )
 }
 
+// ─── Search bar with mode toggle ─────────────────────────────────────────────
+
+type SearchMode = 'food' | 'recipe'
+
+function SearchBar({
+  value,
+  onChange,
+  mode,
+  onModeChange,
+  onGenerate,
+  isGenerating,
+}: {
+  value: string
+  onChange: (value: string) => void
+  mode: SearchMode
+  onModeChange: (mode: SearchMode) => void
+  onGenerate: () => void
+  isGenerating: boolean
+}) {
+  const placeholder =
+    mode === 'food'
+      ? 'search recipe or ingredients'
+      : 'generating from your pantry...'
+
+  return (
+    <div className="relative w-full border-b border-espresso pb-6">
+      <div className="flex items-center gap-4">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && mode === 'recipe') onGenerate()
+          }}
+          className="w-full bg-transparent font-serif text-2xl md:text-3xl text-espresso placeholder:text-espresso/40 placeholder:font-serif focus:outline-none"
+        />
+
+        {/* mode toggle pill */}
+        <div className="flex-shrink-0 flex items-center border border-espresso/15 overflow-hidden">
+          <button
+            onClick={() => onModeChange('food')}
+            className={`px-3 py-1.5 font-sans text-[9px] uppercase tracking-[0.18em] transition-colors duration-150 ${
+              mode === 'food'
+                ? 'bg-espresso text-cream'
+                : 'text-espresso/40 hover:text-espresso/70'
+            }`}
+          >
+            Food
+          </button>
+          <button
+            onClick={() => {
+              onModeChange('recipe')
+              onGenerate()
+            }}
+            className={`px-3 py-1.5 font-sans text-[9px] uppercase tracking-[0.18em] transition-colors duration-150 ${
+              mode === 'recipe'
+                ? 'bg-sage text-cream'
+                : 'text-espresso/40 hover:text-espresso/70'
+            }`}
+          >
+            {isGenerating ? '...' : 'Recipes'}
+          </button>
+        </div>
+
+        <Image
+          src="/leaf.png"
+          alt="Search"
+          width={28}
+          height={28}
+          unoptimized
+          className="flex-shrink-0"
+        />
+      </div>
+    </div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function DashboardPage() {
+  const { user, isLoading: isUserLoading } = useUser()
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedItem, setSelectedItem] = useState<FoodItem | null>(null)
+  const [searchMode, setSearchMode] = useState<SearchMode>('food')
+
+  const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null)
   const [pantryItems, setPantryItems] = useState<FoodItem[]>([])
-  
+
+  const [recipeResult, setRecipeResult] = useState<GenerateResult | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [selectedRecipe, setSelectedRecipe] = useState<GeneratedRecipe | null>(null)
+
   const { results: searchResults, isLoading, isSearching } = useDebouncedSearch(searchQuery)
 
-  // Determine which items to display
   const displayItems = isSearching ? searchResults : pantryItems
   const isShowingSearchResults = isSearching
 
+  const handleGenerate = async () => {
+    if (isGenerating || !user) return
+    setIsGenerating(true)
+    setRecipeResult(null)
+    try {
+      const result = await generateRecipes(user.id, 'flexible', 2)
+      setRecipeResult(result)
+
+      // auto-save each generated recipe
+      const saves = result.all_recipes.map((r) =>
+        saveRecipe(user.id, r).catch(() => null)
+      )
+      await Promise.all(saves)
+
+      if (result.total_count > 0) {
+        toast.success(`${result.total_count} recipe${result.total_count > 1 ? 's' : ''} generated`)
+      } else {
+        toast.info('No recipes could be generated from your pantry')
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate recipes'
+      toast.error(msg)
+      setSearchMode('food')
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handleModeChange = (mode: SearchMode) => {
+    setSearchMode(mode)
+    if (mode === 'food') {
+      setRecipeResult(null)
+    }
+  }
+
   const handleAddToPantry = (item: FoodItem) => {
-    // Check if item already in pantry
-    const exists = pantryItems.some((p) => p.id === item.id)
-    if (exists) {
+    if (pantryItems.some((p) => p.id === item.id)) {
       toast.info(`${item.product_name} is already in your pantry`)
       return
     }
-
     setPantryItems((prev) => [...prev, item])
     toast.success(`${item.product_name} added to pantry`)
-    setSelectedItem(null)
-  }
-
-  const isItemInPantry = (item: FoodItem) => {
-    return pantryItems.some((p) => p.id === item.id)
+    setSelectedFood(null)
   }
 
   return (
@@ -313,46 +398,109 @@ export default function DashboardPage() {
           <h1 className="font-serif text-2xl text-espresso">Dashboard</h1>
         </div>
       </div>
+
       <div className="p-8">
-        <SearchBar value={searchQuery} onChange={setSearchQuery} />
+        <SearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          mode={searchMode}
+          onModeChange={handleModeChange}
+          onGenerate={handleGenerate}
+          isGenerating={isGenerating}
+        />
 
-        <div className="mt-8">
-          <p className="font-sans text-xs uppercase tracking-[0.2em] text-espresso/40 mb-8">
-            {isShowingSearchResults ? (
-              isLoading ? (
-                'Searching...'
-              ) : (
-                `${displayItems.length} ${displayItems.length === 1 ? 'result' : 'results'} for "${searchQuery}"`
-              )
-            ) : (
-              `${displayItems.length} ${displayItems.length === 1 ? 'item' : 'items'} in pantry`
-            )}
-          </p>
-
-          {displayItems.length === 0 && !isLoading ? (
-            <div className="py-16 text-center">
-              <p className="font-serif text-xl text-espresso/50">
-                {isShowingSearchResults
-                  ? `No results found for "${searchQuery}"`
-                  : 'Your pantry is empty'}
+        {/* generating state */}
+        <AnimatePresence>
+          {isGenerating && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              className="mt-12 py-16 text-center"
+            >
+              <p className="font-serif text-2xl text-espresso/30 mb-2">
+                Sifting through your pantry
               </p>
-            </div>
-          ) : (
-            <FoodGrid items={displayItems} onSelect={setSelectedItem} />
+              <p className="font-sans text-[11px] uppercase tracking-[0.2em] text-espresso/25">
+                generating recipes
+              </p>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
+
+        {/* recipe results */}
+        <AnimatePresence>
+          {!isGenerating && recipeResult && searchMode === 'recipe' && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="mt-8"
+            >
+              <div className="flex items-baseline justify-between mb-2 pb-4 border-b border-espresso/10">
+                <p className="font-sans text-[10px] uppercase tracking-[0.2em] text-espresso/40">
+                  {recipeResult.total_count}{' '}
+                  {recipeResult.total_count === 1 ? 'recipe' : 'recipes'} generated
+                </p>
+                {recipeResult.filtered_count > 0 && (
+                  <p className="font-sans text-[10px] uppercase tracking-[0.2em] text-espresso/25">
+                    {recipeResult.filtered_count} filtered (allergens)
+                  </p>
+                )}
+              </div>
+
+              {recipeResult.all_recipes.map((recipe, i) => (
+                <RecipeCard
+                  key={`${recipe.title}-${i}`}
+                  recipe={recipe}
+                  index={i}
+                  onClick={() => setSelectedRecipe(recipe)}
+                />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* food search results */}
+        {searchMode === 'food' && (
+          <div className="mt-8">
+            <p className="font-sans text-xs uppercase tracking-[0.2em] text-espresso/40 mb-8">
+              {isShowingSearchResults
+                ? isLoading
+                  ? 'Searching...'
+                  : `${displayItems.length} ${displayItems.length === 1 ? 'result' : 'results'} for "${searchQuery}"`
+                : `${displayItems.length} ${displayItems.length === 1 ? 'item' : 'items'} in pantry`}
+            </p>
+
+            {displayItems.length === 0 && !isLoading ? (
+              <div className="py-16 text-center">
+                <p className="font-serif text-xl text-espresso/50">
+                  {isShowingSearchResults
+                    ? `No results found for "${searchQuery}"`
+                    : 'Your pantry is empty'}
+                </p>
+              </div>
+            ) : (
+              <FoodGrid items={displayItems} onSelect={setSelectedFood} />
+            )}
+          </div>
+        )}
       </div>
 
+      {/* food detail modal */}
       <AnimatePresence>
-        {selectedItem && (
-          <DetailModal
-            item={selectedItem}
-            onClose={() => setSelectedItem(null)}
+        {selectedFood && (
+          <FoodDetailModal
+            item={selectedFood}
+            onClose={() => setSelectedFood(null)}
             onAddToPantry={handleAddToPantry}
-            isInPantry={isItemInPantry(selectedItem)}
+            isInPantry={pantryItems.some((p) => p.id === selectedFood.id)}
           />
         )}
       </AnimatePresence>
+
+      {/* recipe detail modal */}
+      <RecipeDetail recipe={selectedRecipe} onClose={() => setSelectedRecipe(null)} />
     </>
   )
 }
