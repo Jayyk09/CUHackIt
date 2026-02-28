@@ -56,6 +56,7 @@ func (h *foodHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	search := strings.TrimSpace(r.URL.Query().Get("q"))
+	h.log.Info("food list handler reached: search=%s limit=%d offset=%d", search, limit, offset)
 	products, err := fetchProducts(r.Context(), h.db, search, limit, offset)
 	if err != nil {
 		h.log.Error("Failed to fetch products: %v", err)
@@ -187,19 +188,36 @@ func (h *foodHandler) enrichProduct(ctx context.Context, product *Product) {
 		return
 	}
 
-	category, ok := categories[product.ProductName]
-	if !ok || strings.TrimSpace(category) == "" {
+	enrichment, ok := categories[product.ProductName]
+	if !ok {
 		return
 	}
 
-	category = strings.TrimSpace(category)
-	product.Category = &category
+	var category *string
+	if strings.TrimSpace(enrichment.Category) != "" {
+		trimmed := strings.TrimSpace(enrichment.Category)
+		product.Category = &trimmed
+		category = &trimmed
+	}
 
-	go func(id int64, category *string) {
+	var shelfLife *int
+	if enrichment.ShelfLife > 0 {
+		value := enrichment.ShelfLife
+		product.ShelfLife = &value
+		shelfLife = &value
+	}
+
+	if category == nil && shelfLife == nil {
+		return
+	}
+
+	go func(id int64, category *string, shelfLife *int, name string) {
 		updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := updateProductMetadata(updateCtx, h.db, id, category, nil); err != nil {
+		if err := updateProductMetadata(updateCtx, h.db, id, category, shelfLife); err != nil {
 			h.log.Error("failed to update product metadata: %v", err)
+			return
 		}
-	}(product.ID, product.Category)
+		h.log.Info("food enrichment saved: id=%d name=%s category=%v shelf_life=%v", id, name, category, shelfLife)
+	}(product.ID, category, shelfLife, product.ProductName)
 }
