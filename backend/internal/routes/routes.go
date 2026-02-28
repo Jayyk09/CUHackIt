@@ -18,7 +18,7 @@ func Setup(r *http.ServeMux, db *database.DB, cfg *config.Config) error {
 	users.RegisterRoutes(r, db, store)
 	food.RegisterRoutes(r, db, store)
 
-	if err := auth.RegisterRoutes(r, cfg, store); err != nil {
+	if err := auth.RegisterRoutes(r, cfg, db); err != nil {
 		return fmt.Errorf("auth routes: %w", err)
 	}
 
