@@ -68,6 +68,7 @@ func (h *Handler) getUserID(r *http.Request) (string, error) {
 type GenerateRecipesRequest struct {
 	Mode        string `json:"mode"`         // "pantry_only", "flexible", "both"
 	RecipeCount int    `json:"recipe_count"` // 1-3
+	UserPrompt  string `json:"user_prompt"`  // Optional free-text (e.g. "grilled chicken")
 }
 
 // GenerateRecipes handles POST /users/{user_id}/recipes/generate
@@ -105,9 +106,15 @@ func (h *Handler) GenerateRecipes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(pantryItems) == 0 {
+	if len(pantryItems) == 0 && req.UserPrompt == "" {
 		h.writeError(w, http.StatusBadRequest, "pantry is empty - add some items first")
 		return
+	}
+
+	// If the pantry is empty but the user gave a prompt, force flexible mode
+	// so the AI can suggest all ingredients.
+	if len(pantryItems) == 0 && req.UserPrompt != "" {
+		req.Mode = "flexible"
 	}
 
 	// Get user's preferences
@@ -158,6 +165,7 @@ func (h *Handler) GenerateRecipes(w http.ResponseWriter, r *http.Request) {
 			CookingSkill:       user.CookingSkill,
 			CuisinePreferences: user.CuisinePreferences,
 			RecipeCount:        req.RecipeCount,
+			UserPrompt:         req.UserPrompt,
 		},
 		Mode: mode,
 	})

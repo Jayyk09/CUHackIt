@@ -39,6 +39,7 @@ func (a *PantryOnlyAgent) GenerateRecipes(ctx context.Context, req RecipeRequest
 		RecipeCount:     req.RecipeCount,
 		PantryOnly:      true,
 		MaxMissingItems: 0, // Strictly pantry-only
+		UserPrompt:      req.UserPrompt,
 	}
 
 	// Generate recipes
