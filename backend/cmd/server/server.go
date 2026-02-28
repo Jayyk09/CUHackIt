@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -52,7 +53,10 @@ func Start(cfg *config.Config, r http.Handler, log logger.Interface) error {
 			return err
 		}
 
-		if err != nil {
+		switch {
+		case sig == syscall.SIGSTOP:
+			return errors.New("integrity issue caused shutdown")
+		case err != nil:
 			return fmt.Errorf("could not stop server gracefully: %w", err)
 		}
 	}
