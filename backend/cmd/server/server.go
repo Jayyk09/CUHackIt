@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/Jayyk09/CUHackIt/config"
 	"github.com/Jayyk09/CUHackIt/pkg/logger"
@@ -42,7 +43,7 @@ func Start(cfg *config.Config, r http.Handler, log logger.Interface) error {
 		log.Info("start shutdown: %v", sig)
 
 		// Give outstanding requests a deadline for completion.
-		ctx, cancel := context.WithTimeout(context.Background(), 10)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		// Asking listener to shutdown and load shed.
